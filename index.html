@@ -1109,6 +1109,36 @@ function switchDemo(type) {
 }
 
 // ═══════════════════════════════════════════════════════════════
+// REFRESH DEMO (rebuild DOM after code changes — called by chat)
+// ═══════════════════════════════════════════════════════════════
+function refreshDemo() {
+  // Update subtitle with rung count
+  const rungCount = activeDemo.rungDefs.length;
+  const sub = document.getElementById('pageSubtitle');
+  if (sub) sub.textContent = sub.textContent.replace(/\d+ Rungs?/, rungCount + ' Rung' + (rungCount !== 1 ? 's' : ''));
+
+  // Update legend if we now have timer/latch types
+  const hasTimers = activeDemo.rungDefs.some(r => r.elements.some(e => e.type === 'TON'));
+  const hasLatch = activeDemo.rungDefs.some(r => r.elements.some(e => e.type === 'OTL' || e.type === 'OTU'));
+  const hasReset = activeDemo.rungDefs.some(r => r.elements.some(e => e.type === 'RES'));
+  const legendBar = document.getElementById('legendBar');
+  let legendHTML = `
+    <span><b>Symbols:</b></span>
+    <span>&#x2500;| |&#x2500; XIC</span>
+    <span>&#x2500;/&#x2500; XIO</span>
+    <span>&#x2500;( )&#x2500; OTE</span>`;
+  if (hasLatch) legendHTML += `<span>&#x2500;[L]&#x2500; OTL</span><span>&#x2500;[U]&#x2500; OTU</span>`;
+  if (hasTimers) legendHTML += `<span>[TON] Timer</span>`;
+  if (hasReset) legendHTML += `<span>[RES] Reset</span>`;
+  legendHTML += `<span style="color:#00cc44;">&#x25CF;</span><span> = power flowing</span>`;
+  legendBar.innerHTML = legendHTML;
+
+  // Rebuild I/O table and rungs
+  buildIOTable();
+  createRungDOM();
+}
+
+// ═══════════════════════════════════════════════════════════════
 // PLC SCAN ENGINE
 // ═══════════════════════════════════════════════════════════════
 function plcScan() {
@@ -1126,35 +1156,82 @@ function plcScan() {
 // ═══════════════════════════════════════════════════════════════
 function getChatSystemPrompt() {
   if (!activeDemo) return '';
-  const type = activeDemo === DEMOS.motor ? 'motor' : 'light';
-  if (type === 'motor') {
-    return `You are an assistant embedded in an interactive PLC ladder logic simulator web page. The current demo is the Motor Start/Stop program with 2 rungs on a ControlLogix 1756-L71.
 
-Program Details:
-- Tags: M1_Start, M1_Stop, M1_Running, M1_Faulted, M2_Start, M2_Stop, M2_Running, M2_Faulted, Photoeye
-- Rung 0: [XIC(M1_Start) || XIC(M1_Running)] XIO(M1_Stop) XIO(M1_Faulted) XIC(Photoeye) OTE(M1_Running)
-- Rung 1: [XIC(M2_Start) || XIC(M2_Running)] XIO(M2_Stop) XIO(M2_Faulted) XIC(Photoeye) OTE(M2_Running)
+  // Build current state snapshot
+  const tagList = Object.keys(tags).join(', ');
+  const timerList = Object.keys(timers).map(t => `${t} (pre:${timers[t].preset}ms)`).join(', ');
+  const rungDesc = activeDemo.rungDefs.map((r, i) => `  Rung ${i}: ${r.comment}`).join('\n');
 
-Logic: Each motor has a start/stop seal-in circuit. M_Start starts the motor, M_Running latches through the parallel branch. M_Stop and M_Faulted are normally-closed contacts (stop/fault protection). Photoeye must be ON (unblocked) for either motor to run.
+  return `You are an AI assistant embedded in an interactive PLC ladder logic simulator. You can both EXPLAIN the logic AND MODIFY it live by returning JavaScript code blocks.
 
-Keep responses concise and helpful.`;
-  } else {
-    return `You are an assistant embedded in an interactive PLC ladder logic simulator web page. The current demo is the Switch/Light/Strobe program with 8 rungs.
+═══ CURRENT PROGRAM STATE ═══
+Tags: ${tagList}
+Timers: ${timerList || 'none'}
+Rungs:
+${rungDesc}
 
-Program Details:
-- Tags: Switch1, Switch2, Switch3, Strobe1, Light1, Light2, Light3, FlashBit
-- Timers: FlashOn (1000ms), FlashOff (1000ms)
-- Rung 0: XIC(Strobe1) XIO(FlashBit) TON(FlashOn) — ON-phase timer
-- Rung 1: XIC(FlashOn.DN) OTL(FlashBit) — Latch FlashBit
-- Rung 2: XIC(Strobe1) XIC(FlashBit) TON(FlashOff) — OFF-phase timer
-- Rung 3: XIC(FlashOff.DN) OTU(FlashBit) — Unlatch FlashBit
-- Rungs 4-6: XIC(SwitchN) XIC(FlashBit) OTE(LightN)
-- Rung 7: XIO(Strobe1) RES(FlashOn) RES(FlashOff)
+═══ LIVE API — MODIFY THE PAGE ═══
+To change the running program, return a \`\`\`js code block. It will be eval'd in the page context. Call refreshDemo() after structural changes. Available globals:
 
-Logic: Strobe1 enables a 1s on/1s off flash cycle via FlashBit. Switches only illuminate their lights during the FlashBit ON phase. When Strobe1 is OFF, timers reset and all lights go off.
+MUTABLE STATE:
+  tags              — Object of boolean tag values, e.g. tags.MyTag = false
+  timers            — Object of timer objects { acc, dn, preset }, e.g. timers.T1 = {acc:0, dn:false, preset:2000}
+  ioConfig          — Array of I/O table entries: { tag, type, typeClass, stateClass, isTimer? }
+  activeDemo.rungDefs — Array of rung definitions (see structure below)
+  activeDemo.scan   — Function called every 50ms to evaluate logic (reassign to change behavior)
 
-Keep responses concise and helpful.`;
-  }
+RUNG DEFINITION STRUCTURE:
+  Each rung: { comment: 'string', elements: [...] }
+  Element types:
+    { type: 'XIC', tag: 'TagName' }           — Normally-open contact
+    { type: 'XIO', tag: 'TagName' }           — Normally-closed contact
+    { type: 'OTE', tag: 'TagName' }           — Output energize
+    { type: 'OTL', tag: 'TagName' }           — Output latch (set)
+    { type: 'OTU', tag: 'TagName' }           — Output unlatch (reset)
+    { type: 'TON', tag: 'TimerName' }         — Timer on-delay (must exist in timers{})
+    { type: 'RES', tag: 'TimerName' }         — Timer reset
+    { type: 'parallel', branches: [[elem,...],[elem,...]] }  — Parallel branches
+
+  Timer .DN access in XIC: { type: 'XIC', tag: 'TimerName.DN' }
+
+HELPER FUNCTIONS:
+  refreshDemo()     — Rebuilds rung DOM + I/O table after adding/removing rungs, tags, or ioConfig entries
+  updateTimer(name, enabled) — Timer accumulation helper for scan functions
+  buildIOTable()    — Rebuilds just the I/O table
+  createRungDOM()   — Rebuilds just the rung containers
+
+═══ EXAMPLE: Add a new rung with a tag ═══
+\`\`\`js
+// Add new tag
+tags.EmergStop = false;
+// Add I/O entry
+ioConfig.push({ tag: 'EmergStop', type: 'Input', typeClass: 'input', stateClass: 'stop' });
+// Add new rung
+activeDemo.rungDefs.push({
+  comment: 'Emergency stop disables Motor 1',
+  elements: [
+    { type: 'XIO', tag: 'EmergStop' },
+    { type: 'OTE', tag: 'M1_Running' },
+  ],
+});
+// Update scan function to include new logic
+const prevScan = activeDemo.scan;
+activeDemo.scan = function() {
+  prevScan();
+  if (tags.EmergStop) tags.M1_Running = false;
+};
+refreshDemo();
+\`\`\`
+
+═══ RULES ═══
+- Keep text explanations concise — focus on what changed and why.
+- When the user asks to modify the program, return a js code block that does it.
+- Always call refreshDemo() after structural changes (adding/removing rungs, tags, ioConfig).
+- No need for refreshDemo() if only changing tag values or timer presets.
+- For scan logic changes, wrap the old scan and extend it, or fully replace activeDemo.scan.
+- You can add multiple rungs, timers, tags in one code block.
+- typeClass options: 'input', 'output', 'sensor', 'timer', 'internal'
+- stateClass options: 'start', 'stop', 'fault', 'running', 'sensor', 'switch', 'light', 'strobe', 'timer', 'internal'`;
 }
 
 let chatHistory = [];
@@ -1285,8 +1362,27 @@ async function sendMessage() {
     } else {
       const data = await resp.json();
       const assistantText = data.content?.[0]?.text || '(no response)';
-      addChatBubble('assistant', assistantText);
       chatHistory.push({ role: 'assistant', content: assistantText });
+
+      // Check for executable JS code blocks
+      const codeMatch = assistantText.match(/```js\s*\n([\s\S]*?)```/);
+      if (codeMatch && codeMatch[1]) {
+        // Show the explanation text (everything outside the code block)
+        const explanation = assistantText.replace(/```js\s*\n[\s\S]*?```/g, '').trim();
+        if (explanation) addChatBubble('assistant', explanation);
+
+        // Execute the code
+        try {
+          addChatBubble('system', '⚡ Applying changes...');
+          eval(codeMatch[1]);
+          addChatBubble('system', '✅ Program updated successfully.');
+        } catch (execErr) {
+          addChatBubble('error', `Code execution error: ${execErr.message}`);
+        }
+      } else {
+        // Plain text response — just display it
+        addChatBubble('assistant', assistantText);
+      }
       statusEl.textContent = 'ready';
     }
   } catch (err) {
