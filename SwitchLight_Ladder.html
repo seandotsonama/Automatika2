@@ -1,0 +1,568 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Interactive Ladder Logic — Switch / Light / Strobe Simulator</title>
+<style>
+  :root {
+    --bg: #f5f5f0;
+    --rail: #333;
+    --wire-off: #555;
+    --wire-on: #00cc44;
+    --rung-bg: #fff;
+    --rung-border: #ccc;
+    --comment-color: #666;
+    --rung-num-bg: #2d5aa0;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Segoe UI', 'Arial', sans-serif;
+    background: var(--bg);
+    color: #333;
+    padding: 20px;
+    user-select: none;
+  }
+  h1 { text-align: center; font-size: 1.3em; margin-bottom: 4px; color: #222; font-weight: 600; }
+  .subtitle { text-align: center; color: var(--comment-color); font-size: 0.8em; margin-bottom: 8px; }
+  .instructions { text-align: center; color: #2d5aa0; font-size: 0.85em; margin-bottom: 20px; font-weight: 600; }
+  .status-panel {
+    display: flex; flex-wrap: wrap; gap: 8px; justify-content: center;
+    margin-bottom: 20px; padding: 10px 15px;
+    background: #fff; border-radius: 8px; border: 1px solid #ddd;
+  }
+  .status-item {
+    padding: 4px 12px; border-radius: 14px; font-size: 0.75em;
+    font-weight: 500; display: flex; align-items: center; gap: 5px;
+  }
+  .status-dot { width: 8px; height: 8px; border-radius: 50%; background: #ccc; display: inline-block; }
+  .status-item.switch-item { background: #f0f0f0; color: #555; }
+  .status-item.switch-item.on { background: #d4f5d4; color: #1a7a1a; }
+  .status-item.strobe-item { background: #f0f0f0; color: #555; }
+  .status-item.strobe-item.on { background: #e8d4f5; color: #6a2d9a; }
+  .status-item.light-green-item { background: #f0f0f0; color: #555; }
+  .status-item.light-green-item.on { background: #d4f5d4; color: #008800; }
+  .status-item.light-yellow-item { background: #f0f0f0; color: #555; }
+  .status-item.light-yellow-item.on { background: #fff3c0; color: #b08000; }
+  .status-item.light-red-item { background: #f0f0f0; color: #555; }
+  .status-item.light-red-item.on { background: #ffd4d4; color: #cc0000; }
+  .status-item.internal-item { background: #f0f0f0; color: #555; }
+  .status-item.internal-item.on { background: #d4e8f5; color: #2d5aa0; }
+  .status-item.on .status-dot { background: #1a7a1a; box-shadow: 0 0 6px #1a7a1a; }
+  .status-item.light-green-item.on .status-dot { background: #33cc33; box-shadow: 0 0 8px #33cc33; }
+  .status-item.light-yellow-item.on .status-dot { background: #ffcc00; box-shadow: 0 0 8px #ffcc00; }
+  .status-item.light-red-item.on .status-dot { background: #ff3333; box-shadow: 0 0 8px #ff3333; }
+  .status-item.strobe-item.on .status-dot { background: #9944cc; box-shadow: 0 0 6px #9944cc; }
+  .status-item.internal-item.on .status-dot { background: #2d5aa0; box-shadow: 0 0 6px #2d5aa0; }
+  .scan-info { text-align: center; margin-bottom: 12px; font-size: 0.7em; color: #999; }
+  .scan-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #ccc; margin-right: 4px; }
+  .scan-dot.active { background: #00cc44; }
+  .rung-container { margin-bottom: 10px; border: 1px solid var(--rung-border); border-radius: 6px; overflow: hidden; }
+  .rung-header {
+    display: flex; align-items: center; gap: 10px; padding: 5px 12px;
+    background: #f9f9f5; border-bottom: 1px solid #eee; font-size: 0.72em;
+  }
+  .rung-num { background: var(--rung-num-bg); color: #fff; border-radius: 3px; padding: 1px 7px; font-weight: 600; font-size: 0.9em; }
+  .rung-comment { color: var(--comment-color); font-style: italic; }
+  .rung-body { background: var(--rung-bg); padding: 10px; min-height: 80px; }
+  .rung.energized { border-left: 3px solid var(--wire-on); }
+  .legend {
+    display: flex; gap: 16px; align-items: center; flex-wrap: wrap;
+    padding: 8px 14px; margin-bottom: 16px; background: #fff;
+    border: 1px solid #eee; border-radius: 6px; font-size: 0.7em; color: #555;
+  }
+  .clickable { cursor: pointer; }
+  .clickable:hover { filter: brightness(1.12); }
+</style>
+</head>
+<body>
+
+<h1>Interactive Ladder Logic Simulator</h1>
+<div class="subtitle">Switch / Light / Strobe Program | 8 Rungs | Real-Time PLC Scan</div>
+<div class="instructions">Double-click any switch or strobe contact to toggle ON / OFF</div>
+<div class="scan-info"><span class="scan-dot" id="scanDot"></span> PLC Scan: 50ms cycle</div>
+
+<div class="status-panel">
+  <div class="status-item switch-item" id="st-Switch1"><span class="status-dot"></span> Switch1: OFF</div>
+  <div class="status-item switch-item" id="st-Switch2"><span class="status-dot"></span> Switch2: OFF</div>
+  <div class="status-item switch-item" id="st-Switch3"><span class="status-dot"></span> Switch3: OFF</div>
+  <div class="status-item strobe-item" id="st-Strobe1"><span class="status-dot"></span> Strobe1: OFF</div>
+  <div class="status-item light-green-item" id="st-Light1"><span class="status-dot"></span> Light1: OFF</div>
+  <div class="status-item light-yellow-item" id="st-Light2"><span class="status-dot"></span> Light2: OFF</div>
+  <div class="status-item light-red-item" id="st-Light3"><span class="status-dot"></span> Light3: OFF</div>
+  <div class="status-item internal-item" id="st-FlashBit"><span class="status-dot"></span> FlashBit: OFF</div>
+</div>
+
+<div class="legend">
+  <span><b>Symbols:</b></span>
+  <span>&#x2500;| |&#x2500; XIC</span>
+  <span>&#x2500;/&#x2500; XIO</span>
+  <span>&#x2500;( )&#x2500; OTE</span>
+  <span>&#x2500;(L)&#x2500; OTL</span>
+  <span>&#x2500;(U)&#x2500; OTU</span>
+  <span>&#x2588; Timer / Instr</span>
+  <span style="color:#00cc44;">&#x25CF;</span><span> = power flowing</span>
+</div>
+
+<div id="rungs"></div>
+
+<script>
+const NS = 'http://www.w3.org/2000/svg';
+const WON = '#00cc44';
+const WOFF = '#555';
+const CW = 56;
+
+// ═══════════════════════════════════════════════════════════════
+// TAG STATE
+// ═══════════════════════════════════════════════════════════════
+const tags = {
+  Switch1: false, Switch2: false, Switch3: false,
+  Strobe1: false,
+  Light1: false, Light2: false, Light3: false,
+  FlashBit: false,
+};
+const timers = {
+  FlashOn:  { ACC: 0, PRE: 1000, EN: false, TT: false, DN: false },
+  FlashOff: { ACC: 0, PRE: 1000, EN: false, TT: false, DN: false },
+};
+
+// ═══════════════════════════════════════════════════════════════
+// SVG HELPERS
+// ═══════════════════════════════════════════════════════════════
+function el(tag, attrs) {
+  const e = document.createElementNS(NS, tag);
+  for (const [k, v] of Object.entries(attrs || {})) e.setAttribute(k, v);
+  return e;
+}
+function ln(x1, y1, x2, y2, stroke, sw) {
+  return el('line', { x1, y1, x2, y2, stroke, 'stroke-width': sw || 2, 'stroke-linecap': 'round' });
+}
+function txt(x, y, text, opts = {}) {
+  const t = el('text', {
+    x, y, fill: opts.fill || '#333',
+    'font-size': opts.size || 10,
+    'font-family': opts.font || "'Segoe UI', Arial, sans-serif",
+    'font-weight': opts.bold ? 'bold' : '500',
+    'text-anchor': 'middle', 'dominant-baseline': 'middle',
+  });
+  t.textContent = text;
+  return t;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// SYMBOL DRAWING FUNCTIONS
+// ═══════════════════════════════════════════════════════════════
+function drawXIC(g, tag, val, pwr, cy) {
+  const col = val ? '#1a7a1a' : '#333';
+  g.appendChild(txt(CW/2, cy - 20, tag, { fill: col, size: 11, bold: val }));
+  g.appendChild(txt(CW/2, cy + 24, val ? '(ON)' : '(OFF)', { fill: val ? '#1a7a1a' : '#999', size: 8 }));
+  g.appendChild(ln(0, cy, 14, cy, pwr ? WON : WOFF, 2.5));
+  g.appendChild(ln(CW-14, cy, CW, cy, (pwr && val) ? WON : WOFF, 2.5));
+  g.appendChild(ln(14, cy-12, 14, cy+12, col, 2.5));
+  g.appendChild(ln(CW-14, cy-12, CW-14, cy+12, col, 2.5));
+}
+
+function drawXIO(g, tag, val, pwr, cy) {
+  const passing = !val;
+  const col = passing ? '#1a7a1a' : '#993333';
+  g.appendChild(txt(CW/2, cy - 20, tag, { fill: col, size: 11, bold: passing }));
+  g.appendChild(txt(CW/2, cy + 24, passing ? '(PASS)' : '(BLOCKED)', { fill: col, size: 7 }));
+  g.appendChild(ln(0, cy, 14, cy, pwr ? WON : WOFF, 2.5));
+  g.appendChild(ln(CW-14, cy, CW, cy, (pwr && passing) ? WON : WOFF, 2.5));
+  g.appendChild(ln(14, cy-12, 14, cy+12, col, 2.5));
+  g.appendChild(ln(CW-14, cy-12, CW-14, cy+12, col, 2.5));
+  g.appendChild(ln(14, cy+12, CW-14, cy-12, col, 2));
+}
+
+const LIGHT_COLORS = {
+  Light1: { on: '#44dd44', glow: '#44dd44', stroke: '#009900', label: '#008800', off: '#e8f4e8', offStroke: '#2d7d2d' },
+  Light2: { on: '#ffee44', glow: '#ffee44', stroke: '#ccaa00', label: '#aa8800', off: '#f4f4e8', offStroke: '#7d7d2d' },
+  Light3: { on: '#ff4444', glow: '#ff4444', stroke: '#cc0000', label: '#cc0000', off: '#f4e8e8', offStroke: '#7d2d2d' },
+};
+const DEFAULT_LIGHT = { on: '#ffee44', glow: '#ffee44', stroke: '#ccaa00', label: '#aa8800', off: '#e8e8f4', offStroke: '#2d2d7d' };
+
+function drawOTE(g, tag, on, pwr, cy) {
+  const w = pwr ? WON : WOFF;
+  const c = LIGHT_COLORS[tag] || DEFAULT_LIGHT;
+  g.appendChild(txt(CW/2, cy - 20, tag, { fill: on ? c.label : c.offStroke, size: 11, bold: on }));
+  g.appendChild(txt(CW/2, cy + 24, on ? '(ON)' : '(OFF)', { fill: on ? c.label : '#999', size: 8 }));
+  g.appendChild(ln(0, cy, 10, cy, w, 2.5));
+  if (on) {
+    g.appendChild(el('ellipse', { cx: CW/2, cy, rx: 18, ry: 16, fill: c.glow, opacity: '0.3' }));
+    g.appendChild(el('ellipse', { cx: CW/2, cy, rx: 14, ry: 12, fill: c.on, stroke: c.stroke, 'stroke-width': 2.5 }));
+  } else {
+    g.appendChild(el('ellipse', { cx: CW/2, cy, rx: 14, ry: 12, fill: c.off, stroke: c.offStroke, 'stroke-width': 2 }));
+  }
+  g.appendChild(ln(CW-10, cy, CW, cy, w, 2.5));
+}
+
+function drawOTL(g, tag, pwr, cy) {
+  const w = pwr ? WON : WOFF;
+  g.appendChild(txt(CW/2, cy - 20, tag, { fill: pwr ? '#7d2d2d' : '#999', size: 10 }));
+  g.appendChild(ln(0, cy, 10, cy, w, 2.5));
+  g.appendChild(el('ellipse', { cx: CW/2, cy, rx: 14, ry: 12, fill: pwr ? '#f4d8d8' : '#f4e8e8', stroke: '#7d2d2d', 'stroke-width': 2 }));
+  g.appendChild(txt(CW/2, cy + 4, 'L', { fill: '#7d2d2d', size: 12, bold: true }));
+  g.appendChild(ln(CW-10, cy, CW, cy, w, 2.5));
+}
+
+function drawOTU(g, tag, pwr, cy) {
+  const w = pwr ? WON : WOFF;
+  g.appendChild(txt(CW/2, cy - 20, tag, { fill: pwr ? '#2d2d7d' : '#999', size: 10 }));
+  g.appendChild(ln(0, cy, 10, cy, w, 2.5));
+  g.appendChild(el('ellipse', { cx: CW/2, cy, rx: 14, ry: 12, fill: pwr ? '#d8d8f4' : '#e8e8f4', stroke: '#2d2d7d', 'stroke-width': 2 }));
+  g.appendChild(txt(CW/2, cy + 4, 'U', { fill: '#2d2d7d', size: 12, bold: true }));
+  g.appendChild(ln(CW-10, cy, CW, cy, w, 2.5));
+}
+
+function drawTON(g, tName, timer, pwr, cy) {
+  const bw = 196, bh = 58;
+  const x = 0, y = cy - 14;
+  g.appendChild(el('rect', { x, y, width: bw, height: bh, rx: 4, fill: pwr ? '#3a7a5a' : '#6a8a7a', stroke: '#2a5a3a', 'stroke-width': 1.5 }));
+  g.appendChild(txt(x + 12, y + 12, 'TON', { fill: '#fff', size: 10, bold: true }));
+  g.appendChild(txt(x + 12, y + 26, `Timer: ${tName}`, { fill: '#e0ffe0', size: 8.5, font: "'Courier New', monospace" }));
+  g.appendChild(txt(x + 12, y + 38, `Preset: ${timer.PRE}ms`, { fill: '#e0ffe0', size: 8.5, font: "'Courier New', monospace" }));
+  // Progress bar
+  const barW = bw - 16, barH = 8, barX = x + 8, barY = y + bh - 14;
+  g.appendChild(el('rect', { x: barX, y: barY, width: barW, height: barH, rx: 2, fill: '#2a5a3a' }));
+  const pct = Math.min(timer.ACC / timer.PRE, 1);
+  if (pct > 0) g.appendChild(el('rect', { x: barX, y: barY, width: barW * pct, height: barH, rx: 2, fill: '#00ee66' }));
+  g.appendChild(txt(x + bw - 12, barY + barH/2, `${timer.ACC}ms`, { fill: '#ccc', size: 7, font: "'Courier New', monospace" }));
+  // Align text anchors
+  g.querySelectorAll('text').forEach(t => { if (!t.getAttribute('text-anchor')) t.setAttribute('text-anchor', 'start'); });
+  g.querySelectorAll('text').forEach(t => t.setAttribute('text-anchor', 'start'));
+  // Fix the ACC label to right-align
+  const accLabel = g.querySelector('text:last-of-type');
+  if (accLabel) accLabel.setAttribute('text-anchor', 'end');
+}
+
+function drawRES(g, tName, pwr, cy) {
+  const bw = 146, bh = 30;
+  const x = 0, y = cy - bh/2;
+  g.appendChild(el('rect', { x, y, width: bw, height: bh, rx: 3, fill: pwr ? '#3a7a5a' : '#6a8a7a', stroke: '#2a5a3a', 'stroke-width': 1.5 }));
+  g.appendChild(txt(x + 12, y + 11, 'RES', { fill: '#fff', size: 9, bold: true }));
+  g.appendChild(txt(x + 12, y + 23, tName, { fill: '#e0ffe0', size: 8.5, font: "'Courier New', monospace" }));
+  g.querySelectorAll('text').forEach(t => t.setAttribute('text-anchor', 'start'));
+}
+
+// ═══════════════════════════════════════════════════════════════
+// RUNG SPECS AND DOM
+// ═══════════════════════════════════════════════════════════════
+const rungSpecs = [
+  { rungType: 'timer-on',    comment: 'Flash oscillator: ON-phase timer (1s)' },
+  { rungType: 'latch-on',    comment: 'Latch FlashBit when ON-phase done' },
+  { rungType: 'timer-off',   comment: 'Flash oscillator: OFF-phase timer (1s)' },
+  { rungType: 'unlatch-off', comment: 'Unlatch FlashBit when OFF-phase done' },
+  { rungType: 'cleanup',     comment: 'Cleanup: reset oscillator when Strobe1 is OFF' },
+  { rungType: 'light', sw: 'Switch1', lt: 'Light1', comment: 'Switch1 -> Light1 (Green): solid or strobe' },
+  { rungType: 'light', sw: 'Switch2', lt: 'Light2', comment: 'Switch2 -> Light2 (Yellow): solid or strobe' },
+  { rungType: 'light', sw: 'Switch3', lt: 'Light3', comment: 'Switch3 -> Light3 (Red): solid or strobe' },
+];
+const rungState = [];
+
+function createRungDOM() {
+  const container = document.getElementById('rungs');
+  rungSpecs.forEach((spec, i) => {
+    const rc = document.createElement('div');
+    rc.className = 'rung-container';
+    const hdr = document.createElement('div');
+    hdr.className = 'rung-header';
+    hdr.innerHTML = `<span class="rung-num">${i}</span><span class="rung-comment">${spec.comment}</span>`;
+    rc.appendChild(hdr);
+    const body = document.createElement('div');
+    body.className = 'rung-body';
+    rc.appendChild(body);
+    container.appendChild(rc);
+    const div = document.createElement('div');
+    div.className = 'rung';
+    body.appendChild(div);
+    rungState.push({ div, body, spec });
+  });
+}
+
+function renderRung(idx) {
+  const rs = rungState[idx];
+  const { body, spec } = rs;
+  const W = body.clientWidth || 900;
+  const cy = 58;
+
+  const svg = document.createElementNS(NS, 'svg');
+  let H, energized;
+  switch (spec.rungType) {
+    case 'timer-on':   ({ H, energized } = renderTimerOnRung(svg, W, cy)); break;
+    case 'latch-on':   ({ H, energized } = renderLatchOnRung(svg, W, cy)); break;
+    case 'timer-off':  ({ H, energized } = renderTimerOffRung(svg, W, cy)); break;
+    case 'unlatch-off':({ H, energized } = renderUnlatchOffRung(svg, W, cy)); break;
+    case 'cleanup':    ({ H, energized } = renderCleanupRung(svg, W, cy)); break;
+    case 'light':      ({ H, energized } = renderLightRung(svg, W, cy, spec.sw, spec.lt)); break;
+  }
+
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+  svg.style.width = '100%';
+  svg.style.height = 'auto';
+
+  const wrapper = document.createElement('div');
+  wrapper.className = energized ? 'rung energized' : 'rung';
+  wrapper.appendChild(svg);
+  body.innerHTML = '';
+  body.appendChild(wrapper);
+  rs.div = wrapper;
+}
+
+// ── Rung renderers ──
+
+function renderTimerOnRung(svg, W, cy) {
+  const H = 110;
+  svg.appendChild(ln(0, 0, 0, H, '#333', 3));
+  svg.appendChild(ln(W, 0, W, H, '#333', 3));
+  const p1 = tags.Strobe1;
+  const p2 = p1 && !tags.FlashBit;
+  const g1 = el('g', { transform: `translate(${W*0.1}, 0)`, class: 'clickable' });
+  drawXIC(g1, 'Strobe1', tags.Strobe1, true, cy);
+  addToggle(g1, 'Strobe1', cy);
+  svg.appendChild(g1);
+  const g2 = el('g', { transform: `translate(${W*0.3}, 0)` });
+  drawXIO(g2, 'FlashBit', tags.FlashBit, p1, cy);
+  svg.appendChild(g2);
+  const g3 = el('g', { transform: `translate(${W*0.52}, 0)` });
+  drawTON(g3, 'FlashOn', timers.FlashOn, p2, cy);
+  svg.appendChild(g3);
+  svg.appendChild(ln(4, cy, W*0.1, cy, WON, 2.5));
+  svg.appendChild(ln(W*0.1+CW, cy, W*0.3, cy, p1 ? WON : WOFF, 2.5));
+  svg.appendChild(ln(W*0.3+CW, cy, W*0.52, cy, p2 ? WON : WOFF, 2.5));
+  svg.appendChild(ln(W*0.52+196, cy, W-4, cy, p2 ? WON : WOFF, 2.5));
+  return { H, energized: p2 };
+}
+
+function renderLatchOnRung(svg, W, cy) {
+  const H = 100;
+  svg.appendChild(ln(0, 0, 0, H, '#333', 3));
+  svg.appendChild(ln(W, 0, W, H, '#333', 3));
+  const p = timers.FlashOn.DN;
+  const g1 = el('g', { transform: `translate(${W*0.2}, 0)` });
+  drawXIC(g1, 'FlashOn.DN', timers.FlashOn.DN, true, cy);
+  svg.appendChild(g1);
+  const g2 = el('g', { transform: `translate(${W*0.55}, 0)` });
+  drawOTL(g2, 'FlashBit', p, cy);
+  svg.appendChild(g2);
+  svg.appendChild(ln(4, cy, W*0.2, cy, WON, 2.5));
+  svg.appendChild(ln(W*0.2+CW, cy, W*0.55, cy, p ? WON : WOFF, 2.5));
+  svg.appendChild(ln(W*0.55+CW, cy, W-4, cy, p ? WON : WOFF, 2.5));
+  return { H, energized: p };
+}
+
+function renderTimerOffRung(svg, W, cy) {
+  const H = 110;
+  svg.appendChild(ln(0, 0, 0, H, '#333', 3));
+  svg.appendChild(ln(W, 0, W, H, '#333', 3));
+  const p1 = tags.Strobe1;
+  const p2 = p1 && tags.FlashBit;
+  const g1 = el('g', { transform: `translate(${W*0.1}, 0)`, class: 'clickable' });
+  drawXIC(g1, 'Strobe1', tags.Strobe1, true, cy);
+  addToggle(g1, 'Strobe1', cy);
+  svg.appendChild(g1);
+  const g2 = el('g', { transform: `translate(${W*0.3}, 0)` });
+  drawXIC(g2, 'FlashBit', tags.FlashBit, p1, cy);
+  svg.appendChild(g2);
+  const g3 = el('g', { transform: `translate(${W*0.52}, 0)` });
+  drawTON(g3, 'FlashOff', timers.FlashOff, p2, cy);
+  svg.appendChild(g3);
+  svg.appendChild(ln(4, cy, W*0.1, cy, WON, 2.5));
+  svg.appendChild(ln(W*0.1+CW, cy, W*0.3, cy, p1 ? WON : WOFF, 2.5));
+  svg.appendChild(ln(W*0.3+CW, cy, W*0.52, cy, p2 ? WON : WOFF, 2.5));
+  svg.appendChild(ln(W*0.52+196, cy, W-4, cy, p2 ? WON : WOFF, 2.5));
+  return { H, energized: p2 };
+}
+
+function renderUnlatchOffRung(svg, W, cy) {
+  const H = 100;
+  svg.appendChild(ln(0, 0, 0, H, '#333', 3));
+  svg.appendChild(ln(W, 0, W, H, '#333', 3));
+  const p = timers.FlashOff.DN;
+  const g1 = el('g', { transform: `translate(${W*0.2}, 0)` });
+  drawXIC(g1, 'FlashOff.DN', timers.FlashOff.DN, true, cy);
+  svg.appendChild(g1);
+  const g2 = el('g', { transform: `translate(${W*0.55}, 0)` });
+  drawOTU(g2, 'FlashBit', p, cy);
+  svg.appendChild(g2);
+  svg.appendChild(ln(4, cy, W*0.2, cy, WON, 2.5));
+  svg.appendChild(ln(W*0.2+CW, cy, W*0.55, cy, p ? WON : WOFF, 2.5));
+  svg.appendChild(ln(W*0.55+CW, cy, W-4, cy, p ? WON : WOFF, 2.5));
+  return { H, energized: p };
+}
+
+function renderCleanupRung(svg, W, cy) {
+  const brSp = 56, numBr = 3;
+  const H = cy + (numBr-1)*brSp + 44;
+  svg.appendChild(ln(0, 0, 0, H, '#333', 3));
+  svg.appendChild(ln(W, 0, W, H, '#333', 3));
+  const p = !tags.Strobe1;
+  const g1 = el('g', { transform: `translate(${W*0.08}, 0)`, class: 'clickable' });
+  drawXIO(g1, 'Strobe1', tags.Strobe1, true, cy);
+  addToggle(g1, 'Strobe1', cy);
+  svg.appendChild(g1);
+  svg.appendChild(ln(4, cy, W*0.08, cy, WON, 2.5));
+  svg.appendChild(ln(W*0.08+CW, cy, W*0.3, cy, p ? WON : WOFF, 2.5));
+  const bx = W*0.3, bEnd = W-60;
+  const y0 = cy, y1 = cy+brSp, y2 = cy+2*brSp;
+  svg.appendChild(ln(bx, y0, bx, y2, p ? WON : WOFF, 2));
+  svg.appendChild(ln(bEnd, y0, bEnd, y2, p ? WON : WOFF, 2));
+  // Branch 0: OTU(FlashBit)
+  const gb0 = el('g', { transform: `translate(${(bx+bEnd)/2-CW/2}, 0)` });
+  drawOTU(gb0, 'FlashBit', p, y0);
+  svg.appendChild(gb0);
+  svg.appendChild(ln(bx, y0, (bx+bEnd)/2-CW/2, y0, p ? WON : WOFF, 2.5));
+  svg.appendChild(ln((bx+bEnd)/2+CW/2, y0, bEnd, y0, p ? WON : WOFF, 2.5));
+  // Branch 1: RES(FlashOn)
+  const gb1 = el('g', { transform: `translate(${(bx+bEnd)/2-73}, 0)` });
+  drawRES(gb1, 'FlashOn', p, y1);
+  svg.appendChild(gb1);
+  svg.appendChild(ln(bx, y1, (bx+bEnd)/2-73, y1, p ? WON : WOFF, 2.5));
+  svg.appendChild(ln((bx+bEnd)/2+73, y1, bEnd, y1, p ? WON : WOFF, 2.5));
+  // Branch 2: RES(FlashOff)
+  const gb2 = el('g', { transform: `translate(${(bx+bEnd)/2-73}, 0)` });
+  drawRES(gb2, 'FlashOff', p, y2);
+  svg.appendChild(gb2);
+  svg.appendChild(ln(bx, y2, (bx+bEnd)/2-73, y2, p ? WON : WOFF, 2.5));
+  svg.appendChild(ln((bx+bEnd)/2+73, y2, bEnd, y2, p ? WON : WOFF, 2.5));
+  svg.appendChild(ln(bEnd, y0, W-4, y0, p ? WON : WOFF, 2.5));
+  return { H, energized: p };
+}
+
+function renderLightRung(svg, W, cy, sw, lt) {
+  const brSp = 60;
+  const H = cy + brSp + 40;
+  svg.appendChild(ln(0, 0, 0, H, '#333', 3));
+  svg.appendChild(ln(W, 0, W, H, '#333', 3));
+  const swOn = tags[sw];
+  const strobeOff = !tags.Strobe1;
+  const flashOn = tags.FlashBit;
+  const branchPwr = swOn && (strobeOff || flashOn);
+  const lightOn = branchPwr;
+  // XIC SwitchN
+  const g1 = el('g', { transform: `translate(${W*0.06}, 0)`, class: 'clickable' });
+  drawXIC(g1, sw, swOn, true, cy);
+  addToggle(g1, sw, cy);
+  svg.appendChild(g1);
+  svg.appendChild(ln(4, cy, W*0.06, cy, WON, 2.5));
+  svg.appendChild(ln(W*0.06+CW, cy, W*0.24, cy, swOn ? WON : WOFF, 2.5));
+  // Branch fork
+  const bx = W*0.24, bEnd = W*0.62;
+  const y0 = cy, y1 = cy + brSp;
+  svg.appendChild(ln(bx, y0, bx, y1, swOn ? WON : WOFF, 2));
+  svg.appendChild(ln(bEnd, y0, bEnd, y1, branchPwr ? WON : WOFF, 2));
+  // Top: XIO(Strobe1)
+  const gTop = el('g', { transform: `translate(${(bx+bEnd)/2-CW/2}, 0)`, class: 'clickable' });
+  drawXIO(gTop, 'Strobe1', tags.Strobe1, swOn, y0);
+  addToggle(gTop, 'Strobe1', y0);
+  svg.appendChild(gTop);
+  const topPwr = swOn && strobeOff;
+  svg.appendChild(ln(bx, y0, (bx+bEnd)/2-CW/2, y0, swOn ? WON : WOFF, 2.5));
+  svg.appendChild(ln((bx+bEnd)/2+CW/2, y0, bEnd, y0, topPwr ? WON : WOFF, 2.5));
+  // Bottom: XIC(FlashBit)
+  const gBot = el('g', { transform: `translate(${(bx+bEnd)/2-CW/2}, 0)` });
+  drawXIC(gBot, 'FlashBit', flashOn, swOn, y1);
+  svg.appendChild(gBot);
+  const botPwr = swOn && flashOn;
+  svg.appendChild(ln(bx, y1, (bx+bEnd)/2-CW/2, y1, swOn ? WON : WOFF, 2.5));
+  svg.appendChild(ln((bx+bEnd)/2+CW/2, y1, bEnd, y1, botPwr ? WON : WOFF, 2.5));
+  // OTE LightN
+  svg.appendChild(ln(bEnd, y0, W*0.72, y0, branchPwr ? WON : WOFF, 2.5));
+  const gL = el('g', { transform: `translate(${W*0.72}, 0)` });
+  drawOTE(gL, lt, lightOn, branchPwr, y0);
+  svg.appendChild(gL);
+  svg.appendChild(ln(W*0.72+CW, y0, W-4, y0, branchPwr ? WON : WOFF, 2.5));
+  return { H, energized: lightOn };
+}
+
+// ═══════════════════════════════════════════════════════════════
+// TOGGLE HELPER (pointerdown survives 50ms SVG rebuilds)
+// ═══════════════════════════════════════════════════════════════
+const clickTracker = {};
+function addToggle(g, tag, cy) {
+  const r = el('rect', { x: 0, y: cy-22, width: CW, height: 44, fill: 'transparent', cursor: 'pointer' });
+  g.appendChild(r);
+  g.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const now = Date.now();
+    if (clickTracker[tag] && (now - clickTracker[tag]) < 500) {
+      tags[tag] = !tags[tag];
+      clickTracker[tag] = 0;
+    } else {
+      clickTracker[tag] = now;
+    }
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════
+// PLC SCAN ENGINE (50ms cycle)
+// ═══════════════════════════════════════════════════════════════
+const SCAN_MS = 50;
+let scanCount = 0;
+
+function updateTimer(t, enabled, dt) {
+  if (enabled) {
+    t.EN = true;
+    if (!t.DN) { t.ACC += dt; t.TT = true; if (t.ACC >= t.PRE) { t.ACC = t.PRE; t.DN = true; t.TT = false; } }
+  } else {
+    t.EN = false; t.TT = false; t.DN = false; t.ACC = 0;
+  }
+}
+function resetTimer(t) { t.EN = false; t.TT = false; t.DN = false; t.ACC = 0; }
+
+function plcScan() {
+  const dt = SCAN_MS;
+  // Rung 0: XIC(Strobe1) XIO(FlashBit) TON(FlashOn,1000,0)
+  updateTimer(timers.FlashOn, tags.Strobe1 && !tags.FlashBit, dt);
+  // Rung 1: XIC(FlashOn.DN) OTL(FlashBit)
+  if (timers.FlashOn.DN) tags.FlashBit = true;
+  // Rung 2: XIC(Strobe1) XIC(FlashBit) TON(FlashOff,1000,0)
+  updateTimer(timers.FlashOff, tags.Strobe1 && tags.FlashBit, dt);
+  // Rung 3: XIC(FlashOff.DN) OTU(FlashBit)
+  if (timers.FlashOff.DN) tags.FlashBit = false;
+  // Rung 4: XIO(Strobe1) cleanup
+  if (!tags.Strobe1) { tags.FlashBit = false; resetTimer(timers.FlashOn); resetTimer(timers.FlashOff); }
+  // Rungs 5-7: light outputs
+  tags.Light1 = tags.Switch1 && (!tags.Strobe1 || tags.FlashBit);
+  tags.Light2 = tags.Switch2 && (!tags.Strobe1 || tags.FlashBit);
+  tags.Light3 = tags.Switch3 && (!tags.Strobe1 || tags.FlashBit);
+
+  for (let i = 0; i < rungState.length; i++) renderRung(i);
+  updateStatusPanel();
+  scanCount++;
+  document.getElementById('scanDot').className = 'scan-dot' + (scanCount % 2 === 0 ? ' active' : '');
+}
+
+function updateStatusPanel() {
+  const items = [
+    ['Switch1', 'switch'], ['Switch2', 'switch'], ['Switch3', 'switch'],
+    ['Strobe1', 'strobe'],
+    ['Light1', 'light-green'], ['Light2', 'light-yellow'], ['Light3', 'light-red'],
+    ['FlashBit', 'internal'],
+  ];
+  items.forEach(([tag, type]) => {
+    const elem = document.getElementById(`st-${tag}`);
+    if (!elem) return;
+    const on = tags[tag];
+    elem.className = `status-item ${type}-item` + (on ? ' on' : '');
+    elem.innerHTML = `<span class="status-dot"></span> ${tag}: ${on ? 'ON' : 'OFF'}`;
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════
+// INITIALIZE
+// ═══════════════════════════════════════════════════════════════
+createRungDOM();
+plcScan();
+setInterval(plcScan, SCAN_MS);
+const ro = new ResizeObserver(() => { for (let i = 0; i < rungState.length; i++) renderRung(i); });
+ro.observe(document.getElementById('rungs'));
+</script>
+
+<div style="text-align:center; margin-top:20px; color:#999; font-size:0.7em;">
+  Interactive PLC Ladder Logic Simulator | Real-time scan at 50ms | Double-click contacts to toggle
+</div>
+
+</body>
+</html>
