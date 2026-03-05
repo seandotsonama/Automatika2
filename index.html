@@ -964,9 +964,10 @@ async function loadDemo(type) {
         addChatBubble('system', `${label} generated. Reloading...`);
         // Brief delay so user sees the message
         await new Promise(r => setTimeout(r, 500));
-        document.open();
-        document.write(htmlMatch[1]);
-        document.close();
+        // Use Blob URL for a true page navigation — scripts execute cleanly
+        const blob = new Blob([htmlMatch[1]], { type: 'text/html' });
+        window.location.href = URL.createObjectURL(blob);
+        return; // page is navigating away
       } else {
         addChatBubble('error', 'Could not extract valid HTML from response.');
         addChatBubble('assistant', text);
