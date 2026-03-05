@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Interactive Ladder Logic — Switch / Light / Strobe Simulator</title>
+<title>Interactive Ladder Logic — Motor Start/Stop Simulator</title>
 <style>
   :root {
     --bg: #f5f5f0;
@@ -14,6 +14,7 @@
     --rung-border: #ccc;
     --comment-color: #666;
     --rung-num-bg: #2d5aa0;
+    --sidebar-width: 320px;
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body {
@@ -22,38 +23,34 @@
     color: #333;
     padding: 20px;
     user-select: none;
+    height: 100vh;
+    overflow: hidden;
   }
+
+  /* ═══ Page Layout ═══ */
+  .page-wrapper {
+    display: flex;
+    gap: 16px;
+    height: calc(100vh - 40px);
+  }
+  .main-content {
+    flex: 1;
+    overflow-y: auto;
+    min-width: 0;
+  }
+  .sidebar {
+    width: var(--sidebar-width);
+    min-width: var(--sidebar-width);
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    height: 100%;
+  }
+
+  /* ═══ Main Content ═══ */
   h1 { text-align: center; font-size: 1.3em; margin-bottom: 4px; color: #222; font-weight: 600; }
   .subtitle { text-align: center; color: var(--comment-color); font-size: 0.8em; margin-bottom: 8px; }
   .instructions { text-align: center; color: #2d5aa0; font-size: 0.85em; margin-bottom: 20px; font-weight: 600; }
-  .status-panel {
-    display: flex; flex-wrap: wrap; gap: 8px; justify-content: center;
-    margin-bottom: 20px; padding: 10px 15px;
-    background: #fff; border-radius: 8px; border: 1px solid #ddd;
-  }
-  .status-item {
-    padding: 4px 12px; border-radius: 14px; font-size: 0.75em;
-    font-weight: 500; display: flex; align-items: center; gap: 5px;
-  }
-  .status-dot { width: 8px; height: 8px; border-radius: 50%; background: #ccc; display: inline-block; }
-  .status-item.switch-item { background: #f0f0f0; color: #555; }
-  .status-item.switch-item.on { background: #d4f5d4; color: #1a7a1a; }
-  .status-item.strobe-item { background: #f0f0f0; color: #555; }
-  .status-item.strobe-item.on { background: #e8d4f5; color: #6a2d9a; }
-  .status-item.light-green-item { background: #f0f0f0; color: #555; }
-  .status-item.light-green-item.on { background: #d4f5d4; color: #008800; }
-  .status-item.light-yellow-item { background: #f0f0f0; color: #555; }
-  .status-item.light-yellow-item.on { background: #fff3c0; color: #b08000; }
-  .status-item.light-red-item { background: #f0f0f0; color: #555; }
-  .status-item.light-red-item.on { background: #ffd4d4; color: #cc0000; }
-  .status-item.internal-item { background: #f0f0f0; color: #555; }
-  .status-item.internal-item.on { background: #d4e8f5; color: #2d5aa0; }
-  .status-item.on .status-dot { background: #1a7a1a; box-shadow: 0 0 6px #1a7a1a; }
-  .status-item.light-green-item.on .status-dot { background: #33cc33; box-shadow: 0 0 8px #33cc33; }
-  .status-item.light-yellow-item.on .status-dot { background: #ffcc00; box-shadow: 0 0 8px #ffcc00; }
-  .status-item.light-red-item.on .status-dot { background: #ff3333; box-shadow: 0 0 8px #ff3333; }
-  .status-item.strobe-item.on .status-dot { background: #9944cc; box-shadow: 0 0 6px #9944cc; }
-  .status-item.internal-item.on .status-dot { background: #2d5aa0; box-shadow: 0 0 6px #2d5aa0; }
   .scan-info { text-align: center; margin-bottom: 12px; font-size: 0.7em; color: #999; }
   .scan-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #ccc; margin-right: 4px; }
   .scan-dot.active { background: #00cc44; }
@@ -73,38 +70,324 @@
   }
   .clickable { cursor: pointer; }
   .clickable:hover { filter: brightness(1.12); }
+
+  /* ═══ Demo Buttons ═══ */
+  .demo-buttons {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+    margin-bottom: 14px;
+  }
+  .demo-btn {
+    padding: 7px 18px;
+    border: 2px solid #2d5aa0;
+    border-radius: 20px;
+    background: #fff;
+    color: #2d5aa0;
+    font-size: 0.82em;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: 'Segoe UI', 'Arial', sans-serif;
+    transition: background 0.15s, color 0.15s;
+  }
+  .demo-btn:hover {
+    background: #2d5aa0;
+    color: #fff;
+  }
+  .demo-btn:active {
+    background: #1e4080;
+    border-color: #1e4080;
+    color: #fff;
+  }
+  .demo-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  /* ═══ Sidebar: I/O Table ═══ */
+  .io-panel {
+    background: #fff;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    overflow: hidden;
+    flex-shrink: 0;
+  }
+  .panel-header {
+    background: #2d5aa0;
+    color: #fff;
+    padding: 8px 12px;
+    font-size: 0.85em;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .io-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.75em;
+  }
+  .io-table th {
+    background: #f0f0f0;
+    padding: 5px 8px;
+    text-align: left;
+    font-weight: 600;
+    color: #555;
+    border-bottom: 1px solid #ddd;
+  }
+  .io-table td {
+    padding: 4px 8px;
+    border-bottom: 1px solid #f0f0f0;
+  }
+  .io-table tr:last-child td { border-bottom: none; }
+  .io-table tr:hover { background: #f9f9f5; }
+  .io-type-badge {
+    font-size: 0.85em;
+    padding: 1px 6px;
+    border-radius: 8px;
+    font-weight: 500;
+  }
+  .io-type-input  { background: #e8f5e9; color: #2e7d32; }
+  .io-type-output { background: #e3f2fd; color: #1565c0; }
+  .io-type-sensor { background: #f3e5f5; color: #7b1fa2; }
+  .io-state { display: flex; align-items: center; gap: 5px; font-weight: 500; font-size: 0.95em; }
+  .io-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: #ccc; display: inline-block;
+    transition: background 0.15s, box-shadow 0.15s;
+  }
+  .io-state.on .io-dot { box-shadow: 0 0 6px currentColor; }
+  .io-state.start-on   .io-dot { background: #33cc33; color: #33cc33; }
+  .io-state.stop-on    .io-dot { background: #ff3333; color: #ff3333; }
+  .io-state.fault-on   .io-dot { background: #ff9933; color: #ff9933; }
+  .io-state.running-on .io-dot { background: #3388dd; color: #3388dd; }
+  .io-state.sensor-on  .io-dot { background: #9944cc; color: #9944cc; }
+  .io-state.on { color: #222; }
+  .io-state.off { color: #aaa; }
+
+  /* ═══ Sidebar: Chat ═══ */
+  .chat-panel {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    background: #fff;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    overflow: hidden;
+    min-height: 0;
+  }
+  .api-key-area {
+    padding: 6px 10px;
+    border-bottom: 1px solid #eee;
+    display: flex;
+    gap: 6px;
+    align-items: center;
+  }
+  .api-key-input {
+    flex: 1;
+    padding: 4px 8px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 0.72em;
+    font-family: monospace;
+    outline: none;
+  }
+  .api-key-input:focus { border-color: #2d5aa0; }
+  .api-key-btn {
+    padding: 4px 10px;
+    background: #2d5aa0;
+    color: #fff;
+    border: none;
+    border-radius: 4px;
+    font-size: 0.7em;
+    cursor: pointer;
+    font-weight: 600;
+  }
+  .api-key-btn:hover { background: #1e4080; }
+  .api-key-saved {
+    font-size: 0.7em;
+    color: #2e7d32;
+    font-weight: 600;
+    display: none;
+  }
+  .chat-messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-height: 0;
+  }
+  .chat-bubble {
+    max-width: 90%;
+    padding: 8px 12px;
+    border-radius: 12px;
+    font-size: 0.8em;
+    line-height: 1.4;
+    word-wrap: break-word;
+    white-space: pre-wrap;
+  }
+  .chat-bubble.user {
+    align-self: flex-end;
+    background: #2d5aa0;
+    color: #fff;
+    border-bottom-right-radius: 4px;
+  }
+  .chat-bubble.assistant {
+    align-self: flex-start;
+    background: #f0f0f0;
+    color: #333;
+    border-bottom-left-radius: 4px;
+  }
+  .chat-bubble.system {
+    align-self: center;
+    background: #fff3cd;
+    color: #856404;
+    font-size: 0.72em;
+    text-align: center;
+    border-radius: 8px;
+    padding: 6px 14px;
+  }
+  .chat-bubble.error {
+    align-self: center;
+    background: #f8d7da;
+    color: #721c24;
+    font-size: 0.72em;
+    text-align: center;
+    border-radius: 8px;
+    padding: 6px 14px;
+  }
+  .typing-indicator {
+    align-self: flex-start;
+    padding: 8px 16px;
+    background: #f0f0f0;
+    border-radius: 12px;
+    border-bottom-left-radius: 4px;
+    font-size: 0.8em;
+    color: #999;
+  }
+  .typing-indicator span {
+    animation: blink 1.4s infinite both;
+  }
+  .typing-indicator span:nth-child(2) { animation-delay: 0.2s; }
+  .typing-indicator span:nth-child(3) { animation-delay: 0.4s; }
+  @keyframes blink {
+    0%, 80%, 100% { opacity: 0.3; }
+    40% { opacity: 1; }
+  }
+  .chat-input-area {
+    display: flex;
+    gap: 6px;
+    padding: 8px 10px;
+    border-top: 1px solid #eee;
+    background: #fafafa;
+  }
+  .chat-input {
+    flex: 1;
+    padding: 6px 10px;
+    border: 1px solid #ddd;
+    border-radius: 16px;
+    font-size: 0.8em;
+    outline: none;
+    font-family: 'Segoe UI', 'Arial', sans-serif;
+  }
+  .chat-input:focus { border-color: #2d5aa0; }
+  .chat-send-btn {
+    padding: 6px 14px;
+    background: #2d5aa0;
+    color: #fff;
+    border: none;
+    border-radius: 16px;
+    font-size: 0.8em;
+    cursor: pointer;
+    font-weight: 600;
+  }
+  .chat-send-btn:hover { background: #1e4080; }
+  .chat-send-btn:disabled { background: #999; cursor: not-allowed; }
+
+  /* ═══ Responsive ═══ */
+  @media (max-width: 900px) {
+    .page-wrapper {
+      flex-direction: column;
+      height: auto;
+      overflow: visible;
+    }
+    body { overflow: auto; height: auto; }
+    .sidebar {
+      width: 100%;
+      min-width: 100%;
+      height: auto;
+    }
+    .chat-panel { min-height: 400px; }
+  }
 </style>
 </head>
 <body>
 
-<h1>Interactive Ladder Logic Simulator</h1>
-<div class="subtitle">Switch / Light / Strobe Program | 8 Rungs | Real-Time PLC Scan</div>
-<div class="instructions">Double-click any switch or strobe contact to toggle ON / OFF</div>
-<div class="scan-info"><span class="scan-dot" id="scanDot"></span> PLC Scan: 50ms cycle</div>
+<div class="page-wrapper">
+  <!-- ═══ Left: Main Content ═══ -->
+  <div class="main-content">
+    <h1>Interactive Ladder Logic Simulator</h1>
+    <div class="subtitle">Motor Start/Stop Program | 2 Rungs | Real-Time PLC Scan</div>
+    <div class="instructions">Double-click any input contact to toggle ON / OFF</div>
 
-<div class="status-panel">
-  <div class="status-item switch-item" id="st-Switch1"><span class="status-dot"></span> Switch1: OFF</div>
-  <div class="status-item switch-item" id="st-Switch2"><span class="status-dot"></span> Switch2: OFF</div>
-  <div class="status-item switch-item" id="st-Switch3"><span class="status-dot"></span> Switch3: OFF</div>
-  <div class="status-item strobe-item" id="st-Strobe1"><span class="status-dot"></span> Strobe1: OFF</div>
-  <div class="status-item light-green-item" id="st-Light1"><span class="status-dot"></span> Light1: OFF</div>
-  <div class="status-item light-yellow-item" id="st-Light2"><span class="status-dot"></span> Light2: OFF</div>
-  <div class="status-item light-red-item" id="st-Light3"><span class="status-dot"></span> Light3: OFF</div>
-  <div class="status-item internal-item" id="st-FlashBit"><span class="status-dot"></span> FlashBit: OFF</div>
+    <div class="demo-buttons">
+      <button class="demo-btn" id="loadLightDemo">Load Light Demo</button>
+      <button class="demo-btn" id="loadMotorDemo">Load Motor Demo</button>
+    </div>
+
+    <div class="scan-info"><span class="scan-dot" id="scanDot"></span> PLC Scan: 50ms cycle</div>
+
+    <div class="legend">
+      <span><b>Symbols:</b></span>
+      <span>&#x2500;| |&#x2500; XIC</span>
+      <span>&#x2500;/&#x2500; XIO</span>
+      <span>&#x2500;( )&#x2500; OTE</span>
+      <span style="color:#00cc44;">&#x25CF;</span><span> = power flowing</span>
+    </div>
+
+    <div id="rungs"></div>
+
+    <div style="text-align:center; margin-top:20px; color:#999; font-size:0.7em;">
+      Interactive PLC Ladder Logic Simulator | Real-time scan at 50ms | Double-click contacts to toggle
+    </div>
+  </div>
+
+  <!-- ═══ Right: Sidebar ═══ -->
+  <div class="sidebar">
+    <!-- I/O Table -->
+    <div class="io-panel">
+      <div class="panel-header">&#x1F4CA; I/O Status</div>
+      <table class="io-table">
+        <thead>
+          <tr><th>Tag</th><th>Type</th><th>State</th></tr>
+        </thead>
+        <tbody id="ioTableBody"></tbody>
+      </table>
+    </div>
+
+    <!-- Chat Window -->
+    <div class="chat-panel">
+      <div class="panel-header">
+        <span>&#x1F4AC; Claude Chat</span>
+        <span id="chatStatus" style="font-size:0.8em; opacity:0.8;">disconnected</span>
+      </div>
+      <div class="api-key-area">
+        <input type="password" class="api-key-input" id="apiKeyInput" placeholder="sk-ant-..." />
+        <button class="api-key-btn" id="apiKeySave">Save</button>
+        <span class="api-key-saved" id="apiKeySaved">&#x2713; Saved</span>
+      </div>
+      <div class="chat-messages" id="chatMessages">
+        <div class="chat-bubble system">Enter your Anthropic API key above to start chatting with Claude about this ladder logic program.</div>
+      </div>
+      <div class="chat-input-area">
+        <input type="text" class="chat-input" id="chatInput" placeholder="Ask about the ladder logic..." disabled />
+        <button class="chat-send-btn" id="chatSendBtn" disabled>Send</button>
+      </div>
+    </div>
+  </div>
 </div>
-
-<div class="legend">
-  <span><b>Symbols:</b></span>
-  <span>&#x2500;| |&#x2500; XIC</span>
-  <span>&#x2500;/&#x2500; XIO</span>
-  <span>&#x2500;( )&#x2500; OTE</span>
-  <span>&#x2500;(L)&#x2500; OTL</span>
-  <span>&#x2500;(U)&#x2500; OTU</span>
-  <span>&#x2588; Timer / Instr</span>
-  <span style="color:#00cc44;">&#x25CF;</span><span> = power flowing</span>
-</div>
-
-<div id="rungs"></div>
 
 <script>
 const NS = 'http://www.w3.org/2000/svg';
@@ -116,15 +399,48 @@ const CW = 56;
 // TAG STATE
 // ═══════════════════════════════════════════════════════════════
 const tags = {
-  Switch1: false, Switch2: false, Switch3: false,
-  Strobe1: false,
-  Light1: false, Light2: false, Light3: false,
-  FlashBit: false,
+  M1_Start: false, M1_Stop: false, M1_Running: false, M1_Faulted: false,
+  M2_Start: false, M2_Stop: false, M2_Running: false, M2_Faulted: false,
+  Photoeye: false,
 };
-const timers = {
-  FlashOn:  { ACC: 0, PRE: 1000, EN: false, TT: false, DN: false },
-  FlashOff: { ACC: 0, PRE: 1000, EN: false, TT: false, DN: false },
-};
+
+// ═══════════════════════════════════════════════════════════════
+// I/O TABLE CONFIG
+// ═══════════════════════════════════════════════════════════════
+const ioConfig = [
+  { tag: 'M1_Start',   type: 'Input',  typeClass: 'input',  stateClass: 'start' },
+  { tag: 'M1_Stop',    type: 'Input',  typeClass: 'input',  stateClass: 'stop' },
+  { tag: 'M1_Faulted', type: 'Input',  typeClass: 'input',  stateClass: 'fault' },
+  { tag: 'M1_Running', type: 'Output', typeClass: 'output', stateClass: 'running' },
+  { tag: 'M2_Start',   type: 'Input',  typeClass: 'input',  stateClass: 'start' },
+  { tag: 'M2_Stop',    type: 'Input',  typeClass: 'input',  stateClass: 'stop' },
+  { tag: 'M2_Faulted', type: 'Input',  typeClass: 'input',  stateClass: 'fault' },
+  { tag: 'M2_Running', type: 'Output', typeClass: 'output', stateClass: 'running' },
+  { tag: 'Photoeye',   type: 'Sensor', typeClass: 'sensor', stateClass: 'sensor' },
+];
+
+function buildIOTable() {
+  const tbody = document.getElementById('ioTableBody');
+  ioConfig.forEach(({ tag, type, typeClass }) => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td style="font-weight:500">${tag}</td>
+      <td><span class="io-type-badge io-type-${typeClass}">${type}</span></td>
+      <td><div class="io-state off" id="io-${tag}"><span class="io-dot"></span> OFF</div></td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+function updateIOTable() {
+  ioConfig.forEach(({ tag, stateClass }) => {
+    const el = document.getElementById(`io-${tag}`);
+    if (!el) return;
+    const on = tags[tag];
+    el.className = 'io-state ' + (on ? `on ${stateClass}-on` : 'off');
+    el.innerHTML = `<span class="io-dot"></span> ${on ? 'ON' : 'OFF'}`;
+  });
+}
 
 // ═══════════════════════════════════════════════════════════════
 // SVG HELPERS
@@ -180,18 +496,13 @@ function drawXIO(g, tag, val, pwr, cy) {
   g.appendChild(ln(14, cy+12, CW-14, cy-12, col, 2));
 }
 
-const LIGHT_COLORS = {
-  Light1: { on: '#44dd44', glow: '#44dd44', stroke: '#009900', label: '#008800', off: '#e8f4e8', offStroke: '#2d7d2d' },
-  Light2: { on: '#ffee44', glow: '#ffee44', stroke: '#ccaa00', label: '#aa8800', off: '#f4f4e8', offStroke: '#7d7d2d' },
-  Light3: { on: '#ff4444', glow: '#ff4444', stroke: '#cc0000', label: '#cc0000', off: '#f4e8e8', offStroke: '#7d2d2d' },
-};
-const DEFAULT_LIGHT = { on: '#ffee44', glow: '#ffee44', stroke: '#ccaa00', label: '#aa8800', off: '#e8e8f4', offStroke: '#2d2d7d' };
+const MOTOR_COLOR = { on: '#3388dd', glow: '#3388dd', stroke: '#1a5599', label: '#2d5aa0', off: '#e8eef4', offStroke: '#2d5a7d' };
 
 function drawOTE(g, tag, on, pwr, cy) {
   const w = pwr ? WON : WOFF;
-  const c = LIGHT_COLORS[tag] || DEFAULT_LIGHT;
+  const c = MOTOR_COLOR;
   g.appendChild(txt(CW/2, cy - 20, tag, { fill: on ? c.label : c.offStroke, size: 11, bold: on }));
-  g.appendChild(txt(CW/2, cy + 24, on ? '(ON)' : '(OFF)', { fill: on ? c.label : '#999', size: 8 }));
+  g.appendChild(txt(CW/2, cy + 24, on ? '(RUN)' : '(OFF)', { fill: on ? c.label : '#999', size: 8 }));
   g.appendChild(ln(0, cy, 10, cy, w, 2.5));
   if (on) {
     g.appendChild(el('ellipse', { cx: CW/2, cy, rx: 18, ry: 16, fill: c.glow, opacity: '0.3' }));
@@ -202,66 +513,12 @@ function drawOTE(g, tag, on, pwr, cy) {
   g.appendChild(ln(CW-10, cy, CW, cy, w, 2.5));
 }
 
-function drawOTL(g, tag, pwr, cy) {
-  const w = pwr ? WON : WOFF;
-  g.appendChild(txt(CW/2, cy - 20, tag, { fill: pwr ? '#7d2d2d' : '#999', size: 10 }));
-  g.appendChild(ln(0, cy, 10, cy, w, 2.5));
-  g.appendChild(el('ellipse', { cx: CW/2, cy, rx: 14, ry: 12, fill: pwr ? '#f4d8d8' : '#f4e8e8', stroke: '#7d2d2d', 'stroke-width': 2 }));
-  g.appendChild(txt(CW/2, cy + 4, 'L', { fill: '#7d2d2d', size: 12, bold: true }));
-  g.appendChild(ln(CW-10, cy, CW, cy, w, 2.5));
-}
-
-function drawOTU(g, tag, pwr, cy) {
-  const w = pwr ? WON : WOFF;
-  g.appendChild(txt(CW/2, cy - 20, tag, { fill: pwr ? '#2d2d7d' : '#999', size: 10 }));
-  g.appendChild(ln(0, cy, 10, cy, w, 2.5));
-  g.appendChild(el('ellipse', { cx: CW/2, cy, rx: 14, ry: 12, fill: pwr ? '#d8d8f4' : '#e8e8f4', stroke: '#2d2d7d', 'stroke-width': 2 }));
-  g.appendChild(txt(CW/2, cy + 4, 'U', { fill: '#2d2d7d', size: 12, bold: true }));
-  g.appendChild(ln(CW-10, cy, CW, cy, w, 2.5));
-}
-
-function drawTON(g, tName, timer, pwr, cy) {
-  const bw = 196, bh = 58;
-  const x = 0, y = cy - 14;
-  g.appendChild(el('rect', { x, y, width: bw, height: bh, rx: 4, fill: pwr ? '#3a7a5a' : '#6a8a7a', stroke: '#2a5a3a', 'stroke-width': 1.5 }));
-  g.appendChild(txt(x + 12, y + 12, 'TON', { fill: '#fff', size: 10, bold: true }));
-  g.appendChild(txt(x + 12, y + 26, `Timer: ${tName}`, { fill: '#e0ffe0', size: 8.5, font: "'Courier New', monospace" }));
-  g.appendChild(txt(x + 12, y + 38, `Preset: ${timer.PRE}ms`, { fill: '#e0ffe0', size: 8.5, font: "'Courier New', monospace" }));
-  // Progress bar
-  const barW = bw - 16, barH = 8, barX = x + 8, barY = y + bh - 14;
-  g.appendChild(el('rect', { x: barX, y: barY, width: barW, height: barH, rx: 2, fill: '#2a5a3a' }));
-  const pct = Math.min(timer.ACC / timer.PRE, 1);
-  if (pct > 0) g.appendChild(el('rect', { x: barX, y: barY, width: barW * pct, height: barH, rx: 2, fill: '#00ee66' }));
-  g.appendChild(txt(x + bw - 12, barY + barH/2, `${timer.ACC}ms`, { fill: '#ccc', size: 7, font: "'Courier New', monospace" }));
-  // Align text anchors
-  g.querySelectorAll('text').forEach(t => { if (!t.getAttribute('text-anchor')) t.setAttribute('text-anchor', 'start'); });
-  g.querySelectorAll('text').forEach(t => t.setAttribute('text-anchor', 'start'));
-  // Fix the ACC label to right-align
-  const accLabel = g.querySelector('text:last-of-type');
-  if (accLabel) accLabel.setAttribute('text-anchor', 'end');
-}
-
-function drawRES(g, tName, pwr, cy) {
-  const bw = 146, bh = 30;
-  const x = 0, y = cy - bh/2;
-  g.appendChild(el('rect', { x, y, width: bw, height: bh, rx: 3, fill: pwr ? '#3a7a5a' : '#6a8a7a', stroke: '#2a5a3a', 'stroke-width': 1.5 }));
-  g.appendChild(txt(x + 12, y + 11, 'RES', { fill: '#fff', size: 9, bold: true }));
-  g.appendChild(txt(x + 12, y + 23, tName, { fill: '#e0ffe0', size: 8.5, font: "'Courier New', monospace" }));
-  g.querySelectorAll('text').forEach(t => t.setAttribute('text-anchor', 'start'));
-}
-
 // ═══════════════════════════════════════════════════════════════
 // RUNG SPECS AND DOM
 // ═══════════════════════════════════════════════════════════════
 const rungSpecs = [
-  { rungType: 'timer-on',    comment: 'Flash oscillator: ON-phase timer (1s)' },
-  { rungType: 'latch-on',    comment: 'Latch FlashBit when ON-phase done' },
-  { rungType: 'timer-off',   comment: 'Flash oscillator: OFF-phase timer (1s)' },
-  { rungType: 'unlatch-off', comment: 'Unlatch FlashBit when OFF-phase done' },
-  { rungType: 'cleanup',     comment: 'Cleanup: reset oscillator when Strobe1 is OFF' },
-  { rungType: 'light', sw: 'Switch1', lt: 'Light1', comment: 'Switch1 -> Light1 (Green): solid or strobe' },
-  { rungType: 'light', sw: 'Switch2', lt: 'Light2', comment: 'Switch2 -> Light2 (Yellow): solid or strobe' },
-  { rungType: 'light', sw: 'Switch3', lt: 'Light3', comment: 'Switch3 -> Light3 (Red): solid or strobe' },
+  { start: 'M1_Start', running: 'M1_Running', stop: 'M1_Stop', fault: 'M1_Faulted', pe: 'Photoeye', comment: 'Motor 1: Start/Stop seal-in with fault protection + photoeye' },
+  { start: 'M2_Start', running: 'M2_Running', stop: 'M2_Stop', fault: 'M2_Faulted', pe: 'Photoeye', comment: 'Motor 2: Start/Stop seal-in with fault protection + photoeye' },
 ];
 const rungState = [];
 
@@ -290,17 +547,91 @@ function renderRung(idx) {
   const { body, spec } = rs;
   const W = body.clientWidth || 900;
   const cy = 58;
+  const brSp = 60;
+  const H = cy + brSp + 40;
 
   const svg = document.createElementNS(NS, 'svg');
-  let H, energized;
-  switch (spec.rungType) {
-    case 'timer-on':   ({ H, energized } = renderTimerOnRung(svg, W, cy)); break;
-    case 'latch-on':   ({ H, energized } = renderLatchOnRung(svg, W, cy)); break;
-    case 'timer-off':  ({ H, energized } = renderTimerOffRung(svg, W, cy)); break;
-    case 'unlatch-off':({ H, energized } = renderUnlatchOffRung(svg, W, cy)); break;
-    case 'cleanup':    ({ H, energized } = renderCleanupRung(svg, W, cy)); break;
-    case 'light':      ({ H, energized } = renderLightRung(svg, W, cy, spec.sw, spec.lt)); break;
-  }
+
+  // Rails
+  svg.appendChild(ln(0, 0, 0, H, '#333', 3));
+  svg.appendChild(ln(W, 0, W, H, '#333', 3));
+
+  const startOn = tags[spec.start];
+  const runningOn = tags[spec.running];
+  const stopOn = tags[spec.stop];
+  const faultOn = tags[spec.fault];
+  const peOn = tags[spec.pe];
+
+  // Branch power: M_Start OR M_Running (seal-in)
+  const branchPwr = startOn || runningOn;
+  // After stop (NC): passes when Stop is OFF
+  const afterStop = branchPwr && !stopOn;
+  // After fault (NC): passes when Faulted is OFF
+  const afterFault = afterStop && !faultOn;
+  // After photoeye (NO): passes when Photoeye is ON (unblocked)
+  const afterPE = afterFault && peOn;
+  const energized = afterPE;
+
+  // ── Parallel branch: XIC(M_Start) top, XIC(M_Running) bottom ──
+  const bx = W * 0.05;
+  const bEnd = W * 0.22;
+  const y0 = cy, y1 = cy + brSp;
+
+  // Left rail to branch start
+  svg.appendChild(ln(4, cy, bx, cy, WON, 2.5));
+
+  // Vertical branch lines
+  svg.appendChild(ln(bx, y0, bx, y1, WON, 2));
+  svg.appendChild(ln(bEnd, y0, bEnd, y1, branchPwr ? WON : WOFF, 2));
+
+  // Top branch: XIC(M_Start)
+  const gStart = el('g', { transform: `translate(${(bx+bEnd)/2 - CW/2}, 0)`, class: 'clickable' });
+  drawXIC(gStart, spec.start, startOn, true, y0);
+  addToggle(gStart, spec.start, y0);
+  svg.appendChild(gStart);
+  const startPwr = startOn;
+  svg.appendChild(ln(bx, y0, (bx+bEnd)/2 - CW/2, y0, WON, 2.5));
+  svg.appendChild(ln((bx+bEnd)/2 + CW/2, y0, bEnd, y0, startPwr ? WON : WOFF, 2.5));
+
+  // Bottom branch: XIC(M_Running)
+  const gRun = el('g', { transform: `translate(${(bx+bEnd)/2 - CW/2}, 0)` });
+  drawXIC(gRun, spec.running, runningOn, true, y1);
+  svg.appendChild(gRun);
+  const runPwr = runningOn;
+  svg.appendChild(ln(bx, y1, (bx+bEnd)/2 - CW/2, y1, WON, 2.5));
+  svg.appendChild(ln((bx+bEnd)/2 + CW/2, y1, bEnd, y1, runPwr ? WON : WOFF, 2.5));
+
+  // ── Series: XIO(M_Stop) ──
+  const stopX = W * 0.28;
+  svg.appendChild(ln(bEnd, y0, stopX, y0, branchPwr ? WON : WOFF, 2.5));
+  const gStop = el('g', { transform: `translate(${stopX}, 0)`, class: 'clickable' });
+  drawXIO(gStop, spec.stop, stopOn, branchPwr, y0);
+  addToggle(gStop, spec.stop, y0);
+  svg.appendChild(gStop);
+
+  // ── Series: XIO(M_Faulted) ──
+  const faultX = W * 0.42;
+  svg.appendChild(ln(stopX + CW, y0, faultX, y0, afterStop ? WON : WOFF, 2.5));
+  const gFault = el('g', { transform: `translate(${faultX}, 0)`, class: 'clickable' });
+  drawXIO(gFault, spec.fault, faultOn, afterStop, y0);
+  addToggle(gFault, spec.fault, y0);
+  svg.appendChild(gFault);
+
+  // ── Series: XIC(Photoeye) ──
+  const peX = W * 0.56;
+  svg.appendChild(ln(faultX + CW, y0, peX, y0, afterFault ? WON : WOFF, 2.5));
+  const gPE = el('g', { transform: `translate(${peX}, 0)`, class: 'clickable' });
+  drawXIC(gPE, spec.pe, peOn, afterFault, y0);
+  addToggle(gPE, spec.pe, y0);
+  svg.appendChild(gPE);
+
+  // ── Output: OTE(M_Running) ──
+  const oteX = W * 0.78;
+  svg.appendChild(ln(peX + CW, y0, oteX, y0, afterPE ? WON : WOFF, 2.5));
+  const gOTE = el('g', { transform: `translate(${oteX}, 0)` });
+  drawOTE(gOTE, spec.running, energized, afterPE, y0);
+  svg.appendChild(gOTE);
+  svg.appendChild(ln(oteX + CW, y0, W - 4, y0, afterPE ? WON : WOFF, 2.5));
 
   svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
   svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
@@ -313,172 +644,6 @@ function renderRung(idx) {
   body.innerHTML = '';
   body.appendChild(wrapper);
   rs.div = wrapper;
-}
-
-// ── Rung renderers ──
-
-function renderTimerOnRung(svg, W, cy) {
-  const H = 110;
-  svg.appendChild(ln(0, 0, 0, H, '#333', 3));
-  svg.appendChild(ln(W, 0, W, H, '#333', 3));
-  const p1 = tags.Strobe1;
-  const p2 = p1 && !tags.FlashBit;
-  const g1 = el('g', { transform: `translate(${W*0.1}, 0)`, class: 'clickable' });
-  drawXIC(g1, 'Strobe1', tags.Strobe1, true, cy);
-  addToggle(g1, 'Strobe1', cy);
-  svg.appendChild(g1);
-  const g2 = el('g', { transform: `translate(${W*0.3}, 0)` });
-  drawXIO(g2, 'FlashBit', tags.FlashBit, p1, cy);
-  svg.appendChild(g2);
-  const g3 = el('g', { transform: `translate(${W*0.52}, 0)` });
-  drawTON(g3, 'FlashOn', timers.FlashOn, p2, cy);
-  svg.appendChild(g3);
-  svg.appendChild(ln(4, cy, W*0.1, cy, WON, 2.5));
-  svg.appendChild(ln(W*0.1+CW, cy, W*0.3, cy, p1 ? WON : WOFF, 2.5));
-  svg.appendChild(ln(W*0.3+CW, cy, W*0.52, cy, p2 ? WON : WOFF, 2.5));
-  svg.appendChild(ln(W*0.52+196, cy, W-4, cy, p2 ? WON : WOFF, 2.5));
-  return { H, energized: p2 };
-}
-
-function renderLatchOnRung(svg, W, cy) {
-  const H = 100;
-  svg.appendChild(ln(0, 0, 0, H, '#333', 3));
-  svg.appendChild(ln(W, 0, W, H, '#333', 3));
-  const p = timers.FlashOn.DN;
-  const g1 = el('g', { transform: `translate(${W*0.2}, 0)` });
-  drawXIC(g1, 'FlashOn.DN', timers.FlashOn.DN, true, cy);
-  svg.appendChild(g1);
-  const g2 = el('g', { transform: `translate(${W*0.55}, 0)` });
-  drawOTL(g2, 'FlashBit', p, cy);
-  svg.appendChild(g2);
-  svg.appendChild(ln(4, cy, W*0.2, cy, WON, 2.5));
-  svg.appendChild(ln(W*0.2+CW, cy, W*0.55, cy, p ? WON : WOFF, 2.5));
-  svg.appendChild(ln(W*0.55+CW, cy, W-4, cy, p ? WON : WOFF, 2.5));
-  return { H, energized: p };
-}
-
-function renderTimerOffRung(svg, W, cy) {
-  const H = 110;
-  svg.appendChild(ln(0, 0, 0, H, '#333', 3));
-  svg.appendChild(ln(W, 0, W, H, '#333', 3));
-  const p1 = tags.Strobe1;
-  const p2 = p1 && tags.FlashBit;
-  const g1 = el('g', { transform: `translate(${W*0.1}, 0)`, class: 'clickable' });
-  drawXIC(g1, 'Strobe1', tags.Strobe1, true, cy);
-  addToggle(g1, 'Strobe1', cy);
-  svg.appendChild(g1);
-  const g2 = el('g', { transform: `translate(${W*0.3}, 0)` });
-  drawXIC(g2, 'FlashBit', tags.FlashBit, p1, cy);
-  svg.appendChild(g2);
-  const g3 = el('g', { transform: `translate(${W*0.52}, 0)` });
-  drawTON(g3, 'FlashOff', timers.FlashOff, p2, cy);
-  svg.appendChild(g3);
-  svg.appendChild(ln(4, cy, W*0.1, cy, WON, 2.5));
-  svg.appendChild(ln(W*0.1+CW, cy, W*0.3, cy, p1 ? WON : WOFF, 2.5));
-  svg.appendChild(ln(W*0.3+CW, cy, W*0.52, cy, p2 ? WON : WOFF, 2.5));
-  svg.appendChild(ln(W*0.52+196, cy, W-4, cy, p2 ? WON : WOFF, 2.5));
-  return { H, energized: p2 };
-}
-
-function renderUnlatchOffRung(svg, W, cy) {
-  const H = 100;
-  svg.appendChild(ln(0, 0, 0, H, '#333', 3));
-  svg.appendChild(ln(W, 0, W, H, '#333', 3));
-  const p = timers.FlashOff.DN;
-  const g1 = el('g', { transform: `translate(${W*0.2}, 0)` });
-  drawXIC(g1, 'FlashOff.DN', timers.FlashOff.DN, true, cy);
-  svg.appendChild(g1);
-  const g2 = el('g', { transform: `translate(${W*0.55}, 0)` });
-  drawOTU(g2, 'FlashBit', p, cy);
-  svg.appendChild(g2);
-  svg.appendChild(ln(4, cy, W*0.2, cy, WON, 2.5));
-  svg.appendChild(ln(W*0.2+CW, cy, W*0.55, cy, p ? WON : WOFF, 2.5));
-  svg.appendChild(ln(W*0.55+CW, cy, W-4, cy, p ? WON : WOFF, 2.5));
-  return { H, energized: p };
-}
-
-function renderCleanupRung(svg, W, cy) {
-  const brSp = 56, numBr = 3;
-  const H = cy + (numBr-1)*brSp + 44;
-  svg.appendChild(ln(0, 0, 0, H, '#333', 3));
-  svg.appendChild(ln(W, 0, W, H, '#333', 3));
-  const p = !tags.Strobe1;
-  const g1 = el('g', { transform: `translate(${W*0.08}, 0)`, class: 'clickable' });
-  drawXIO(g1, 'Strobe1', tags.Strobe1, true, cy);
-  addToggle(g1, 'Strobe1', cy);
-  svg.appendChild(g1);
-  svg.appendChild(ln(4, cy, W*0.08, cy, WON, 2.5));
-  svg.appendChild(ln(W*0.08+CW, cy, W*0.3, cy, p ? WON : WOFF, 2.5));
-  const bx = W*0.3, bEnd = W-60;
-  const y0 = cy, y1 = cy+brSp, y2 = cy+2*brSp;
-  svg.appendChild(ln(bx, y0, bx, y2, p ? WON : WOFF, 2));
-  svg.appendChild(ln(bEnd, y0, bEnd, y2, p ? WON : WOFF, 2));
-  // Branch 0: OTU(FlashBit)
-  const gb0 = el('g', { transform: `translate(${(bx+bEnd)/2-CW/2}, 0)` });
-  drawOTU(gb0, 'FlashBit', p, y0);
-  svg.appendChild(gb0);
-  svg.appendChild(ln(bx, y0, (bx+bEnd)/2-CW/2, y0, p ? WON : WOFF, 2.5));
-  svg.appendChild(ln((bx+bEnd)/2+CW/2, y0, bEnd, y0, p ? WON : WOFF, 2.5));
-  // Branch 1: RES(FlashOn)
-  const gb1 = el('g', { transform: `translate(${(bx+bEnd)/2-73}, 0)` });
-  drawRES(gb1, 'FlashOn', p, y1);
-  svg.appendChild(gb1);
-  svg.appendChild(ln(bx, y1, (bx+bEnd)/2-73, y1, p ? WON : WOFF, 2.5));
-  svg.appendChild(ln((bx+bEnd)/2+73, y1, bEnd, y1, p ? WON : WOFF, 2.5));
-  // Branch 2: RES(FlashOff)
-  const gb2 = el('g', { transform: `translate(${(bx+bEnd)/2-73}, 0)` });
-  drawRES(gb2, 'FlashOff', p, y2);
-  svg.appendChild(gb2);
-  svg.appendChild(ln(bx, y2, (bx+bEnd)/2-73, y2, p ? WON : WOFF, 2.5));
-  svg.appendChild(ln((bx+bEnd)/2+73, y2, bEnd, y2, p ? WON : WOFF, 2.5));
-  svg.appendChild(ln(bEnd, y0, W-4, y0, p ? WON : WOFF, 2.5));
-  return { H, energized: p };
-}
-
-function renderLightRung(svg, W, cy, sw, lt) {
-  const brSp = 60;
-  const H = cy + brSp + 40;
-  svg.appendChild(ln(0, 0, 0, H, '#333', 3));
-  svg.appendChild(ln(W, 0, W, H, '#333', 3));
-  const swOn = tags[sw];
-  const strobeOff = !tags.Strobe1;
-  const flashOn = tags.FlashBit;
-  const branchPwr = swOn && (strobeOff || flashOn);
-  const lightOn = branchPwr;
-  // XIC SwitchN
-  const g1 = el('g', { transform: `translate(${W*0.06}, 0)`, class: 'clickable' });
-  drawXIC(g1, sw, swOn, true, cy);
-  addToggle(g1, sw, cy);
-  svg.appendChild(g1);
-  svg.appendChild(ln(4, cy, W*0.06, cy, WON, 2.5));
-  svg.appendChild(ln(W*0.06+CW, cy, W*0.24, cy, swOn ? WON : WOFF, 2.5));
-  // Branch fork
-  const bx = W*0.24, bEnd = W*0.62;
-  const y0 = cy, y1 = cy + brSp;
-  svg.appendChild(ln(bx, y0, bx, y1, swOn ? WON : WOFF, 2));
-  svg.appendChild(ln(bEnd, y0, bEnd, y1, branchPwr ? WON : WOFF, 2));
-  // Top: XIO(Strobe1)
-  const gTop = el('g', { transform: `translate(${(bx+bEnd)/2-CW/2}, 0)`, class: 'clickable' });
-  drawXIO(gTop, 'Strobe1', tags.Strobe1, swOn, y0);
-  addToggle(gTop, 'Strobe1', y0);
-  svg.appendChild(gTop);
-  const topPwr = swOn && strobeOff;
-  svg.appendChild(ln(bx, y0, (bx+bEnd)/2-CW/2, y0, swOn ? WON : WOFF, 2.5));
-  svg.appendChild(ln((bx+bEnd)/2+CW/2, y0, bEnd, y0, topPwr ? WON : WOFF, 2.5));
-  // Bottom: XIC(FlashBit)
-  const gBot = el('g', { transform: `translate(${(bx+bEnd)/2-CW/2}, 0)` });
-  drawXIC(gBot, 'FlashBit', flashOn, swOn, y1);
-  svg.appendChild(gBot);
-  const botPwr = swOn && flashOn;
-  svg.appendChild(ln(bx, y1, (bx+bEnd)/2-CW/2, y1, swOn ? WON : WOFF, 2.5));
-  svg.appendChild(ln((bx+bEnd)/2+CW/2, y1, bEnd, y1, botPwr ? WON : WOFF, 2.5));
-  // OTE LightN
-  svg.appendChild(ln(bEnd, y0, W*0.72, y0, branchPwr ? WON : WOFF, 2.5));
-  const gL = el('g', { transform: `translate(${W*0.72}, 0)` });
-  drawOTE(gL, lt, lightOn, branchPwr, y0);
-  svg.appendChild(gL);
-  svg.appendChild(ln(W*0.72+CW, y0, W-4, y0, branchPwr ? WON : WOFF, 2.5));
-  return { H, energized: lightOn };
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -509,68 +674,335 @@ function addToggle(g, tag, cy) {
 const SCAN_MS = 50;
 let scanCount = 0;
 
-function updateTimer(t, enabled, dt) {
-  if (enabled) {
-    t.EN = true;
-    if (!t.DN) { t.ACC += dt; t.TT = true; if (t.ACC >= t.PRE) { t.ACC = t.PRE; t.DN = true; t.TT = false; } }
-  } else {
-    t.EN = false; t.TT = false; t.DN = false; t.ACC = 0;
-  }
-}
-function resetTimer(t) { t.EN = false; t.TT = false; t.DN = false; t.ACC = 0; }
-
 function plcScan() {
-  const dt = SCAN_MS;
-  // Rung 0: XIC(Strobe1) XIO(FlashBit) TON(FlashOn,1000,0)
-  updateTimer(timers.FlashOn, tags.Strobe1 && !tags.FlashBit, dt);
-  // Rung 1: XIC(FlashOn.DN) OTL(FlashBit)
-  if (timers.FlashOn.DN) tags.FlashBit = true;
-  // Rung 2: XIC(Strobe1) XIC(FlashBit) TON(FlashOff,1000,0)
-  updateTimer(timers.FlashOff, tags.Strobe1 && tags.FlashBit, dt);
-  // Rung 3: XIC(FlashOff.DN) OTU(FlashBit)
-  if (timers.FlashOff.DN) tags.FlashBit = false;
-  // Rung 4: XIO(Strobe1) cleanup
-  if (!tags.Strobe1) { tags.FlashBit = false; resetTimer(timers.FlashOn); resetTimer(timers.FlashOff); }
-  // Rungs 5-7: light outputs
-  tags.Light1 = tags.Switch1 && (!tags.Strobe1 || tags.FlashBit);
-  tags.Light2 = tags.Switch2 && (!tags.Strobe1 || tags.FlashBit);
-  tags.Light3 = tags.Switch3 && (!tags.Strobe1 || tags.FlashBit);
+  // Rung 0: [XIC(M1_Start), XIC(M1_Running)] XIO(M1_Stop) XIO(M1_Faulted) XIC(Photoeye) OTE(M1_Running)
+  tags.M1_Running = (tags.M1_Start || tags.M1_Running) && !tags.M1_Stop && !tags.M1_Faulted && tags.Photoeye;
+  // Rung 1: [XIC(M2_Start), XIC(M2_Running)] XIO(M2_Stop) XIO(M2_Faulted) XIC(Photoeye) OTE(M2_Running)
+  tags.M2_Running = (tags.M2_Start || tags.M2_Running) && !tags.M2_Stop && !tags.M2_Faulted && tags.Photoeye;
 
   for (let i = 0; i < rungState.length; i++) renderRung(i);
-  updateStatusPanel();
+  updateIOTable();
   scanCount++;
   document.getElementById('scanDot').className = 'scan-dot' + (scanCount % 2 === 0 ? ' active' : '');
 }
 
-function updateStatusPanel() {
-  const items = [
-    ['Switch1', 'switch'], ['Switch2', 'switch'], ['Switch3', 'switch'],
-    ['Strobe1', 'strobe'],
-    ['Light1', 'light-green'], ['Light2', 'light-yellow'], ['Light3', 'light-red'],
-    ['FlashBit', 'internal'],
-  ];
-  items.forEach(([tag, type]) => {
-    const elem = document.getElementById(`st-${tag}`);
-    if (!elem) return;
-    const on = tags[tag];
-    elem.className = `status-item ${type}-item` + (on ? ' on' : '');
-    elem.innerHTML = `<span class="status-dot"></span> ${tag}: ${on ? 'ON' : 'OFF'}`;
+// ═══════════════════════════════════════════════════════════════
+// CLAUDE CHAT (Anthropic API — direct browser call)
+// ═══════════════════════════════════════════════════════════════
+const CHAT_SYSTEM_PROMPT = `You are an assistant embedded in an interactive PLC ladder logic simulator web page. The page simulates a Motor Start/Stop program with 2 rungs on a ControlLogix 1756-L71.
+
+Program Details:
+- Tags: M1_Start, M1_Stop, M1_Running, M1_Faulted, M2_Start, M2_Stop, M2_Running, M2_Faulted, Photoeye
+- Rung 0: [XIC(M1_Start), XIC(M1_Running)] XIO(M1_Stop) XIO(M1_Faulted) XIC(Photoeye) OTE(M1_Running)
+- Rung 1: [XIC(M2_Start), XIC(M2_Running)] XIO(M2_Stop) XIO(M2_Faulted) XIC(Photoeye) OTE(M2_Running)
+
+Logic: Each motor has a start/stop seal-in circuit. M_Start starts the motor, M_Running latches through the parallel branch. M_Stop and M_Faulted are normally-closed contacts (stop/fault protection). Photoeye must be ON (unblocked) for either motor to run.
+
+The user can ask you questions about how the ladder logic works, request modifications to the HTML/JavaScript code, or ask general PLC programming questions. Keep responses concise and helpful. When suggesting code changes, provide the specific code that should be changed.`;
+
+let chatHistory = [];
+let apiKey = localStorage.getItem('claude_api_key') || '';
+let isSending = false;
+
+function initChat() {
+  const keyInput = document.getElementById('apiKeyInput');
+  const saveBtn = document.getElementById('apiKeySave');
+  const savedLabel = document.getElementById('apiKeySaved');
+  const chatInput = document.getElementById('chatInput');
+  const sendBtn = document.getElementById('chatSendBtn');
+  const statusEl = document.getElementById('chatStatus');
+
+  // Restore saved key
+  if (apiKey) {
+    keyInput.value = apiKey.slice(0, 12) + '...';
+    keyInput.type = 'text';
+    chatInput.disabled = false;
+    sendBtn.disabled = false;
+    statusEl.textContent = 'ready';
+    savedLabel.style.display = 'inline';
+  }
+
+  // Save API key
+  saveBtn.addEventListener('click', () => {
+    const val = keyInput.value.trim();
+    if (val && !val.endsWith('...')) {
+      apiKey = val;
+      localStorage.setItem('claude_api_key', apiKey);
+      keyInput.value = apiKey.slice(0, 12) + '...';
+      keyInput.type = 'text';
+      chatInput.disabled = false;
+      sendBtn.disabled = false;
+      statusEl.textContent = 'ready';
+      savedLabel.style.display = 'inline';
+      setTimeout(() => { savedLabel.style.display = 'none'; }, 2000);
+    }
   });
+
+  // Allow re-editing key
+  keyInput.addEventListener('focus', () => {
+    if (keyInput.value.endsWith('...')) {
+      keyInput.value = '';
+      keyInput.type = 'password';
+    }
+  });
+  keyInput.addEventListener('blur', () => {
+    if (!keyInput.value.trim() && apiKey) {
+      keyInput.value = apiKey.slice(0, 12) + '...';
+      keyInput.type = 'text';
+    }
+  });
+
+  // Send on Enter
+  chatInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      sendMessage();
+    }
+  });
+  sendBtn.addEventListener('click', sendMessage);
+}
+
+function addChatBubble(role, text) {
+  const messagesDiv = document.getElementById('chatMessages');
+  const bubble = document.createElement('div');
+  bubble.className = `chat-bubble ${role}`;
+  bubble.textContent = text;
+  messagesDiv.appendChild(bubble);
+  messagesDiv.scrollTop = messagesDiv.scrollHeight;
+  return bubble;
+}
+
+function showTyping() {
+  const messagesDiv = document.getElementById('chatMessages');
+  const indicator = document.createElement('div');
+  indicator.className = 'typing-indicator';
+  indicator.id = 'typingIndicator';
+  indicator.innerHTML = '<span>.</span><span>.</span><span>.</span>';
+  messagesDiv.appendChild(indicator);
+  messagesDiv.scrollTop = messagesDiv.scrollHeight;
+}
+
+function hideTyping() {
+  const ind = document.getElementById('typingIndicator');
+  if (ind) ind.remove();
+}
+
+async function sendMessage(overrideText) {
+  if (isSending) return;
+  const input = document.getElementById('chatInput');
+  const sendBtn = document.getElementById('chatSendBtn');
+  const statusEl = document.getElementById('chatStatus');
+  const userText = overrideText || input.value.trim();
+  if (!userText || !apiKey) return;
+
+  // Add user message
+  input.value = '';
+  addChatBubble('user', userText);
+  chatHistory.push({ role: 'user', content: userText });
+
+  isSending = true;
+  sendBtn.disabled = true;
+  input.disabled = true;
+  statusEl.textContent = 'thinking...';
+  showTyping();
+
+  try {
+    const resp = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true',
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 4096,
+        system: CHAT_SYSTEM_PROMPT,
+        messages: chatHistory,
+      }),
+    });
+
+    hideTyping();
+
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({}));
+      const msg = err.error?.message || `API error ${resp.status}`;
+      addChatBubble('error', msg);
+      statusEl.textContent = 'error';
+    } else {
+      const data = await resp.json();
+      const assistantText = data.content?.[0]?.text || '(no response)';
+      addChatBubble('assistant', assistantText);
+      chatHistory.push({ role: 'assistant', content: assistantText });
+      statusEl.textContent = 'ready';
+    }
+  } catch (err) {
+    hideTyping();
+    addChatBubble('error', `Network error: ${err.message}`);
+    statusEl.textContent = 'error';
+  } finally {
+    isSending = false;
+    sendBtn.disabled = false;
+    input.disabled = false;
+    input.focus();
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// DEMO LOADER (generates HTML via Claude, then hot-swaps the page)
+// ═══════════════════════════════════════════════════════════════
+const DEMO_SYSTEM_PROMPT = `You are a code generator for interactive PLC ladder logic simulator web pages.
+
+RULES:
+- Output ONLY a single html code block with the COMPLETE, self-contained HTML file. Nothing else.
+- Do NOT output L5X files, explanations, or any text outside the code block.
+- The HTML must be fully functional — paste-into-browser ready.
+
+REQUIRED ARCHITECTURE (must match exactly):
+- SVG-based ladder logic rendered every 50ms PLC scan cycle
+- Double-click toggles input contacts (use pointerdown with 500ms double-click tracker — required because SVG rebuilds every 50ms destroy elements before click fires)
+- Forced indicator: green highlight rect on contacts that were manually toggled (forced[tag] = tags[tag])
+- Right sidebar (320px) with:
+  1. I/O Status table (Tag | Type | State) with color-coded type badges (Input=green, Output=blue, Sensor=purple) and state dots
+  2. Claude Chat panel: API key input (stored in localStorage as 'claude_api_key'), message area, send button, Anthropic API direct browser call with 'anthropic-dangerous-direct-browser-access' header
+- Two demo buttons in the title area: "Load Light Demo" and "Load Motor Demo" — each calls loadDemo('light') or loadDemo('motor') which sends a generation prompt to Claude, extracts the HTML from the response, and replaces the page via document.open/write/close
+- Flexbox page layout (.page-wrapper), responsive stacking below 900px
+- Visual style: #2d5aa0 blue theme, #f5f5f0 background, white panels with rounded borders, pill-shaped badges
+
+DRAWING FUNCTIONS needed:
+- drawXIC(g, tag, val, pwr, cy) — normally-open contact with vertical bars
+- drawXIO(g, tag, val, pwr, cy) — normally-closed contact with diagonal slash
+- drawOTE(g, tag, on, pwr, cy) — output energize with ellipse
+- For Light Demo also: drawOTL, drawOTU (latch/unlatch with L/U in circle), drawTON (timer block), drawRES (reset)`;
+
+const DEMO_PROMPTS = {
+  light: `Generate a "Switch/Light/Strobe Demo" ladder logic simulator HTML file.
+
+Program (8 rungs):
+- Tags: Switch1, Switch2, Switch3, Strobe1, Light1, Light2, Light3, FlashBit, FlashOn (timer), FlashOff (timer)
+- Rung 0: XIC(Strobe1) XIO(FlashBit) TON(FlashOn, 1000ms) — ON-phase timer
+- Rung 1: XIC(FlashOn.DN) OTL(FlashBit) — Latch FlashBit when ON-phase done
+- Rung 2: XIC(Strobe1) XIC(FlashBit) TON(FlashOff, 1000ms) — OFF-phase timer
+- Rung 3: XIC(FlashOff.DN) OTU(FlashBit) — Unlatch FlashBit when OFF-phase done
+- Rung 4: XIC(Switch1) XIC(FlashBit) OTE(Light1) — Switch1 controls Light1
+- Rung 5: XIC(Switch2) XIC(FlashBit) OTE(Light2) — Switch2 controls Light2
+- Rung 6: XIC(Switch3) XIC(FlashBit) OTE(Light3) — Switch3 controls Light3
+- Rung 7: XIO(Strobe1) RES(FlashOn) RES(FlashOff) — Reset timers when strobe off
+
+When Strobe1 is OFF, FlashBit stays OFF and lights stay off. Switches only work when Strobe1 is ON and FlashBit is cycling.
+
+Title: "Interactive Ladder Logic Simulator"
+Subtitle: "Switch / Light / Strobe Program | 8 Rungs | Real-Time PLC Scan"`,
+
+  motor: `Generate a "Motor Start/Stop Demo" ladder logic simulator HTML file.
+
+Program (2 rungs):
+- Tags: M1_Start, M1_Stop, M1_Running, M1_Faulted, M2_Start, M2_Stop, M2_Running, M2_Faulted, Photoeye
+- Rung 0: [XIC(M1_Start) || XIC(M1_Running)] XIO(M1_Stop) XIO(M1_Faulted) XIC(Photoeye) OTE(M1_Running)
+- Rung 1: [XIC(M2_Start) || XIC(M2_Running)] XIO(M2_Stop) XIO(M2_Faulted) XIC(Photoeye) OTE(M2_Running)
+
+Each motor has a start/stop seal-in circuit with parallel branches for the latch. M_Stop and M_Faulted are normally-closed. Photoeye is shared — must be ON for either motor to run.
+
+Title: "Interactive Ladder Logic Simulator"
+Subtitle: "Motor Start/Stop Program | 2 Rungs | Real-Time PLC Scan"`,
+};
+
+async function loadDemo(type) {
+  if (isSending) return;
+  if (!apiKey) {
+    addChatBubble('system', 'Please save your API key first to use demo prompts.');
+    return;
+  }
+
+  const label = type === 'light' ? 'Light Demo' : 'Motor Demo';
+  addChatBubble('user', `Load ${label}`);
+
+  isSending = true;
+  const sendBtn = document.getElementById('chatSendBtn');
+  const input = document.getElementById('chatInput');
+  const statusEl = document.getElementById('chatStatus');
+  sendBtn.disabled = true;
+  input.disabled = true;
+  statusEl.textContent = 'generating...';
+  showTyping();
+
+  // Disable demo buttons while generating
+  document.getElementById('loadLightDemo').disabled = true;
+  document.getElementById('loadMotorDemo').disabled = true;
+
+  try {
+    const resp = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true',
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 16384,
+        system: DEMO_SYSTEM_PROMPT,
+        messages: [{ role: 'user', content: DEMO_PROMPTS[type] }],
+      }),
+    });
+
+    hideTyping();
+
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({}));
+      addChatBubble('error', err.error?.message || `API error ${resp.status}`);
+      statusEl.textContent = 'error';
+    } else {
+      const data = await resp.json();
+      const text = data.content?.[0]?.text || '';
+
+      // Extract HTML from ```html code block
+      const htmlMatch = text.match(/```html\s*\n([\s\S]*?)```/);
+      if (htmlMatch && htmlMatch[1] && htmlMatch[1].includes('<html')) {
+        addChatBubble('system', `${label} generated. Reloading...`);
+        // Brief delay so user sees the message
+        await new Promise(r => setTimeout(r, 500));
+        document.open();
+        document.write(htmlMatch[1]);
+        document.close();
+      } else {
+        addChatBubble('error', 'Could not extract valid HTML from response.');
+        addChatBubble('assistant', text);
+        statusEl.textContent = 'ready';
+      }
+    }
+  } catch (err) {
+    hideTyping();
+    addChatBubble('error', `Network error: ${err.message}`);
+    statusEl.textContent = 'error';
+  } finally {
+    isSending = false;
+    sendBtn.disabled = false;
+    input.disabled = false;
+    document.getElementById('loadLightDemo').disabled = false;
+    document.getElementById('loadMotorDemo').disabled = false;
+  }
+}
+
+function initDemoButtons() {
+  document.getElementById('loadLightDemo').addEventListener('click', () => loadDemo('light'));
+  document.getElementById('loadMotorDemo').addEventListener('click', () => loadDemo('motor'));
 }
 
 // ═══════════════════════════════════════════════════════════════
 // INITIALIZE
 // ═══════════════════════════════════════════════════════════════
+buildIOTable();
 createRungDOM();
 plcScan();
 setInterval(plcScan, SCAN_MS);
 const ro = new ResizeObserver(() => { for (let i = 0; i < rungState.length; i++) renderRung(i); });
 ro.observe(document.getElementById('rungs'));
+initChat();
+initDemoButtons();
 </script>
-
-<div style="text-align:center; margin-top:20px; color:#999; font-size:0.7em;">
-  Interactive PLC Ladder Logic Simulator | Real-time scan at 50ms | Double-click contacts to toggle
-</div>
 
 </body>
 </html>
