@@ -14,6 +14,7 @@
     --rung-border: #ccc;
     --comment-color: #666;
     --rung-num-bg: #2d5aa0;
+    --sidebar-width: 320px;
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body {
@@ -22,35 +23,34 @@
     color: #333;
     padding: 20px;
     user-select: none;
+    height: 100vh;
+    overflow: hidden;
   }
+
+  /* ═══ Page Layout ═══ */
+  .page-wrapper {
+    display: flex;
+    gap: 16px;
+    height: calc(100vh - 40px);
+  }
+  .main-content {
+    flex: 1;
+    overflow-y: auto;
+    min-width: 0;
+  }
+  .sidebar {
+    width: var(--sidebar-width);
+    min-width: var(--sidebar-width);
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    height: 100%;
+  }
+
+  /* ═══ Main Content ═══ */
   h1 { text-align: center; font-size: 1.3em; margin-bottom: 4px; color: #222; font-weight: 600; }
   .subtitle { text-align: center; color: var(--comment-color); font-size: 0.8em; margin-bottom: 8px; }
   .instructions { text-align: center; color: #2d5aa0; font-size: 0.85em; margin-bottom: 20px; font-weight: 600; }
-  .status-panel {
-    display: flex; flex-wrap: wrap; gap: 8px; justify-content: center;
-    margin-bottom: 20px; padding: 10px 15px;
-    background: #fff; border-radius: 8px; border: 1px solid #ddd;
-  }
-  .status-item {
-    padding: 4px 12px; border-radius: 14px; font-size: 0.75em;
-    font-weight: 500; display: flex; align-items: center; gap: 5px;
-  }
-  .status-dot { width: 8px; height: 8px; border-radius: 50%; background: #ccc; display: inline-block; }
-  .status-item.start-item { background: #f0f0f0; color: #555; }
-  .status-item.start-item.on { background: #d4f5d4; color: #1a7a1a; }
-  .status-item.start-item.on .status-dot { background: #33cc33; box-shadow: 0 0 6px #33cc33; }
-  .status-item.stop-item { background: #f0f0f0; color: #555; }
-  .status-item.stop-item.on { background: #ffd4d4; color: #cc0000; }
-  .status-item.stop-item.on .status-dot { background: #ff3333; box-shadow: 0 0 6px #ff3333; }
-  .status-item.fault-item { background: #f0f0f0; color: #555; }
-  .status-item.fault-item.on { background: #ffe8c0; color: #b06000; }
-  .status-item.fault-item.on .status-dot { background: #ff9933; box-shadow: 0 0 6px #ff9933; }
-  .status-item.running-item { background: #f0f0f0; color: #555; }
-  .status-item.running-item.on { background: #d4e8f5; color: #2d5aa0; }
-  .status-item.running-item.on .status-dot { background: #3388dd; box-shadow: 0 0 8px #3388dd; }
-  .status-item.sensor-item { background: #f0f0f0; color: #555; }
-  .status-item.sensor-item.on { background: #e0d4f5; color: #6a2d9a; }
-  .status-item.sensor-item.on .status-dot { background: #9944cc; box-shadow: 0 0 6px #9944cc; }
   .scan-info { text-align: center; margin-bottom: 12px; font-size: 0.7em; color: #999; }
   .scan-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #ccc; margin-right: 4px; }
   .scan-dot.active { background: #00cc44; }
@@ -70,36 +70,324 @@
   }
   .clickable { cursor: pointer; }
   .clickable:hover { filter: brightness(1.12); }
+
+  /* ═══ Demo Buttons ═══ */
+  .demo-buttons {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+    margin-bottom: 14px;
+  }
+  .demo-btn {
+    padding: 7px 18px;
+    border: 2px solid #2d5aa0;
+    border-radius: 20px;
+    background: #fff;
+    color: #2d5aa0;
+    font-size: 0.82em;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: 'Segoe UI', 'Arial', sans-serif;
+    transition: background 0.15s, color 0.15s;
+  }
+  .demo-btn:hover {
+    background: #2d5aa0;
+    color: #fff;
+  }
+  .demo-btn:active {
+    background: #1e4080;
+    border-color: #1e4080;
+    color: #fff;
+  }
+  .demo-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  /* ═══ Sidebar: I/O Table ═══ */
+  .io-panel {
+    background: #fff;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    overflow: hidden;
+    flex-shrink: 0;
+  }
+  .panel-header {
+    background: #2d5aa0;
+    color: #fff;
+    padding: 8px 12px;
+    font-size: 0.85em;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .io-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.75em;
+  }
+  .io-table th {
+    background: #f0f0f0;
+    padding: 5px 8px;
+    text-align: left;
+    font-weight: 600;
+    color: #555;
+    border-bottom: 1px solid #ddd;
+  }
+  .io-table td {
+    padding: 4px 8px;
+    border-bottom: 1px solid #f0f0f0;
+  }
+  .io-table tr:last-child td { border-bottom: none; }
+  .io-table tr:hover { background: #f9f9f5; }
+  .io-type-badge {
+    font-size: 0.85em;
+    padding: 1px 6px;
+    border-radius: 8px;
+    font-weight: 500;
+  }
+  .io-type-input  { background: #e8f5e9; color: #2e7d32; }
+  .io-type-output { background: #e3f2fd; color: #1565c0; }
+  .io-type-sensor { background: #f3e5f5; color: #7b1fa2; }
+  .io-state { display: flex; align-items: center; gap: 5px; font-weight: 500; font-size: 0.95em; }
+  .io-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: #ccc; display: inline-block;
+    transition: background 0.15s, box-shadow 0.15s;
+  }
+  .io-state.on .io-dot { box-shadow: 0 0 6px currentColor; }
+  .io-state.start-on   .io-dot { background: #33cc33; color: #33cc33; }
+  .io-state.stop-on    .io-dot { background: #ff3333; color: #ff3333; }
+  .io-state.fault-on   .io-dot { background: #ff9933; color: #ff9933; }
+  .io-state.running-on .io-dot { background: #3388dd; color: #3388dd; }
+  .io-state.sensor-on  .io-dot { background: #9944cc; color: #9944cc; }
+  .io-state.on { color: #222; }
+  .io-state.off { color: #aaa; }
+
+  /* ═══ Sidebar: Chat ═══ */
+  .chat-panel {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    background: #fff;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    overflow: hidden;
+    min-height: 0;
+  }
+  .api-key-area {
+    padding: 6px 10px;
+    border-bottom: 1px solid #eee;
+    display: flex;
+    gap: 6px;
+    align-items: center;
+  }
+  .api-key-input {
+    flex: 1;
+    padding: 4px 8px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 0.72em;
+    font-family: monospace;
+    outline: none;
+  }
+  .api-key-input:focus { border-color: #2d5aa0; }
+  .api-key-btn {
+    padding: 4px 10px;
+    background: #2d5aa0;
+    color: #fff;
+    border: none;
+    border-radius: 4px;
+    font-size: 0.7em;
+    cursor: pointer;
+    font-weight: 600;
+  }
+  .api-key-btn:hover { background: #1e4080; }
+  .api-key-saved {
+    font-size: 0.7em;
+    color: #2e7d32;
+    font-weight: 600;
+    display: none;
+  }
+  .chat-messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-height: 0;
+  }
+  .chat-bubble {
+    max-width: 90%;
+    padding: 8px 12px;
+    border-radius: 12px;
+    font-size: 0.8em;
+    line-height: 1.4;
+    word-wrap: break-word;
+    white-space: pre-wrap;
+  }
+  .chat-bubble.user {
+    align-self: flex-end;
+    background: #2d5aa0;
+    color: #fff;
+    border-bottom-right-radius: 4px;
+  }
+  .chat-bubble.assistant {
+    align-self: flex-start;
+    background: #f0f0f0;
+    color: #333;
+    border-bottom-left-radius: 4px;
+  }
+  .chat-bubble.system {
+    align-self: center;
+    background: #fff3cd;
+    color: #856404;
+    font-size: 0.72em;
+    text-align: center;
+    border-radius: 8px;
+    padding: 6px 14px;
+  }
+  .chat-bubble.error {
+    align-self: center;
+    background: #f8d7da;
+    color: #721c24;
+    font-size: 0.72em;
+    text-align: center;
+    border-radius: 8px;
+    padding: 6px 14px;
+  }
+  .typing-indicator {
+    align-self: flex-start;
+    padding: 8px 16px;
+    background: #f0f0f0;
+    border-radius: 12px;
+    border-bottom-left-radius: 4px;
+    font-size: 0.8em;
+    color: #999;
+  }
+  .typing-indicator span {
+    animation: blink 1.4s infinite both;
+  }
+  .typing-indicator span:nth-child(2) { animation-delay: 0.2s; }
+  .typing-indicator span:nth-child(3) { animation-delay: 0.4s; }
+  @keyframes blink {
+    0%, 80%, 100% { opacity: 0.3; }
+    40% { opacity: 1; }
+  }
+  .chat-input-area {
+    display: flex;
+    gap: 6px;
+    padding: 8px 10px;
+    border-top: 1px solid #eee;
+    background: #fafafa;
+  }
+  .chat-input {
+    flex: 1;
+    padding: 6px 10px;
+    border: 1px solid #ddd;
+    border-radius: 16px;
+    font-size: 0.8em;
+    outline: none;
+    font-family: 'Segoe UI', 'Arial', sans-serif;
+  }
+  .chat-input:focus { border-color: #2d5aa0; }
+  .chat-send-btn {
+    padding: 6px 14px;
+    background: #2d5aa0;
+    color: #fff;
+    border: none;
+    border-radius: 16px;
+    font-size: 0.8em;
+    cursor: pointer;
+    font-weight: 600;
+  }
+  .chat-send-btn:hover { background: #1e4080; }
+  .chat-send-btn:disabled { background: #999; cursor: not-allowed; }
+
+  /* ═══ Responsive ═══ */
+  @media (max-width: 900px) {
+    .page-wrapper {
+      flex-direction: column;
+      height: auto;
+      overflow: visible;
+    }
+    body { overflow: auto; height: auto; }
+    .sidebar {
+      width: 100%;
+      min-width: 100%;
+      height: auto;
+    }
+    .chat-panel { min-height: 400px; }
+  }
 </style>
 </head>
 <body>
 
-<h1>Interactive Ladder Logic Simulator</h1>
-<div class="subtitle">Motor Start/Stop Program | 2 Rungs | Real-Time PLC Scan</div>
-<div class="instructions">Double-click any input contact to toggle ON / OFF</div>
-<div class="scan-info"><span class="scan-dot" id="scanDot"></span> PLC Scan: 50ms cycle</div>
+<div class="page-wrapper">
+  <!-- ═══ Left: Main Content ═══ -->
+  <div class="main-content">
+    <h1>Interactive Ladder Logic Simulator</h1>
+    <div class="subtitle">Motor Start/Stop Program | 2 Rungs | Real-Time PLC Scan</div>
+    <div class="instructions">Double-click any input contact to toggle ON / OFF</div>
 
-<div class="status-panel">
-  <div class="status-item start-item" id="st-M1_Start"><span class="status-dot"></span> M1_Start: OFF</div>
-  <div class="status-item stop-item" id="st-M1_Stop"><span class="status-dot"></span> M1_Stop: OFF</div>
-  <div class="status-item fault-item" id="st-M1_Faulted"><span class="status-dot"></span> M1_Faulted: OFF</div>
-  <div class="status-item running-item" id="st-M1_Running"><span class="status-dot"></span> M1_Running: OFF</div>
-  <div class="status-item start-item" id="st-M2_Start"><span class="status-dot"></span> M2_Start: OFF</div>
-  <div class="status-item stop-item" id="st-M2_Stop"><span class="status-dot"></span> M2_Stop: OFF</div>
-  <div class="status-item fault-item" id="st-M2_Faulted"><span class="status-dot"></span> M2_Faulted: OFF</div>
-  <div class="status-item running-item" id="st-M2_Running"><span class="status-dot"></span> M2_Running: OFF</div>
-  <div class="status-item sensor-item" id="st-Photoeye"><span class="status-dot"></span> Photoeye: OFF</div>
+    <div class="demo-buttons">
+      <button class="demo-btn" id="loadLightDemo">Load Light Demo</button>
+      <button class="demo-btn" id="loadMotorDemo">Load Motor Demo</button>
+    </div>
+
+    <div class="scan-info"><span class="scan-dot" id="scanDot"></span> PLC Scan: 50ms cycle</div>
+
+    <div class="legend">
+      <span><b>Symbols:</b></span>
+      <span>&#x2500;| |&#x2500; XIC</span>
+      <span>&#x2500;/&#x2500; XIO</span>
+      <span>&#x2500;( )&#x2500; OTE</span>
+      <span style="color:#00cc44;">&#x25CF;</span><span> = power flowing</span>
+    </div>
+
+    <div id="rungs"></div>
+
+    <div style="text-align:center; margin-top:20px; color:#999; font-size:0.7em;">
+      Interactive PLC Ladder Logic Simulator | Real-time scan at 50ms | Double-click contacts to toggle
+    </div>
+  </div>
+
+  <!-- ═══ Right: Sidebar ═══ -->
+  <div class="sidebar">
+    <!-- I/O Table -->
+    <div class="io-panel">
+      <div class="panel-header">&#x1F4CA; I/O Status</div>
+      <table class="io-table">
+        <thead>
+          <tr><th>Tag</th><th>Type</th><th>State</th></tr>
+        </thead>
+        <tbody id="ioTableBody"></tbody>
+      </table>
+    </div>
+
+    <!-- Chat Window -->
+    <div class="chat-panel">
+      <div class="panel-header">
+        <span>&#x1F4AC; Claude Chat</span>
+        <span id="chatStatus" style="font-size:0.8em; opacity:0.8;">disconnected</span>
+      </div>
+      <div class="api-key-area">
+        <input type="password" class="api-key-input" id="apiKeyInput" placeholder="sk-ant-..." />
+        <button class="api-key-btn" id="apiKeySave">Save</button>
+        <span class="api-key-saved" id="apiKeySaved">&#x2713; Saved</span>
+      </div>
+      <div class="chat-messages" id="chatMessages">
+        <div class="chat-bubble system">Enter your Anthropic API key above to start chatting with Claude about this ladder logic program.</div>
+      </div>
+      <div class="chat-input-area">
+        <input type="text" class="chat-input" id="chatInput" placeholder="Ask about the ladder logic..." disabled />
+        <button class="chat-send-btn" id="chatSendBtn" disabled>Send</button>
+      </div>
+    </div>
+  </div>
 </div>
-
-<div class="legend">
-  <span><b>Symbols:</b></span>
-  <span>&#x2500;| |&#x2500; XIC</span>
-  <span>&#x2500;/&#x2500; XIO</span>
-  <span>&#x2500;( )&#x2500; OTE</span>
-  <span style="color:#00cc44;">&#x25CF;</span><span> = power flowing</span>
-</div>
-
-<div id="rungs"></div>
 
 <script>
 const NS = 'http://www.w3.org/2000/svg';
@@ -115,6 +403,44 @@ const tags = {
   M2_Start: false, M2_Stop: false, M2_Running: false, M2_Faulted: false,
   Photoeye: false,
 };
+
+// ═══════════════════════════════════════════════════════════════
+// I/O TABLE CONFIG
+// ═══════════════════════════════════════════════════════════════
+const ioConfig = [
+  { tag: 'M1_Start',   type: 'Input',  typeClass: 'input',  stateClass: 'start' },
+  { tag: 'M1_Stop',    type: 'Input',  typeClass: 'input',  stateClass: 'stop' },
+  { tag: 'M1_Faulted', type: 'Input',  typeClass: 'input',  stateClass: 'fault' },
+  { tag: 'M1_Running', type: 'Output', typeClass: 'output', stateClass: 'running' },
+  { tag: 'M2_Start',   type: 'Input',  typeClass: 'input',  stateClass: 'start' },
+  { tag: 'M2_Stop',    type: 'Input',  typeClass: 'input',  stateClass: 'stop' },
+  { tag: 'M2_Faulted', type: 'Input',  typeClass: 'input',  stateClass: 'fault' },
+  { tag: 'M2_Running', type: 'Output', typeClass: 'output', stateClass: 'running' },
+  { tag: 'Photoeye',   type: 'Sensor', typeClass: 'sensor', stateClass: 'sensor' },
+];
+
+function buildIOTable() {
+  const tbody = document.getElementById('ioTableBody');
+  ioConfig.forEach(({ tag, type, typeClass }) => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td style="font-weight:500">${tag}</td>
+      <td><span class="io-type-badge io-type-${typeClass}">${type}</span></td>
+      <td><div class="io-state off" id="io-${tag}"><span class="io-dot"></span> OFF</div></td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+function updateIOTable() {
+  ioConfig.forEach(({ tag, stateClass }) => {
+    const el = document.getElementById(`io-${tag}`);
+    if (!el) return;
+    const on = tags[tag];
+    el.className = 'io-state ' + (on ? `on ${stateClass}-on` : 'off');
+    el.innerHTML = `<span class="io-dot"></span> ${on ? 'ON' : 'OFF'}`;
+  });
+}
 
 // ═══════════════════════════════════════════════════════════════
 // SVG HELPERS
@@ -355,39 +681,328 @@ function plcScan() {
   tags.M2_Running = (tags.M2_Start || tags.M2_Running) && !tags.M2_Stop && !tags.M2_Faulted && tags.Photoeye;
 
   for (let i = 0; i < rungState.length; i++) renderRung(i);
-  updateStatusPanel();
+  updateIOTable();
   scanCount++;
   document.getElementById('scanDot').className = 'scan-dot' + (scanCount % 2 === 0 ? ' active' : '');
 }
 
-function updateStatusPanel() {
-  const items = [
-    ['M1_Start', 'start'], ['M1_Stop', 'stop'], ['M1_Faulted', 'fault'], ['M1_Running', 'running'],
-    ['M2_Start', 'start'], ['M2_Stop', 'stop'], ['M2_Faulted', 'fault'], ['M2_Running', 'running'],
-    ['Photoeye', 'sensor'],
-  ];
-  items.forEach(([tag, type]) => {
-    const elem = document.getElementById(`st-${tag}`);
-    if (!elem) return;
-    const on = tags[tag];
-    elem.className = `status-item ${type}-item` + (on ? ' on' : '');
-    elem.innerHTML = `<span class="status-dot"></span> ${tag}: ${on ? 'ON' : 'OFF'}`;
+// ═══════════════════════════════════════════════════════════════
+// CLAUDE CHAT (Anthropic API — direct browser call)
+// ═══════════════════════════════════════════════════════════════
+const CHAT_SYSTEM_PROMPT = `You are an assistant embedded in an interactive PLC ladder logic simulator web page. The page simulates a Motor Start/Stop program with 2 rungs on a ControlLogix 1756-L71.
+
+Program Details:
+- Tags: M1_Start, M1_Stop, M1_Running, M1_Faulted, M2_Start, M2_Stop, M2_Running, M2_Faulted, Photoeye
+- Rung 0: [XIC(M1_Start), XIC(M1_Running)] XIO(M1_Stop) XIO(M1_Faulted) XIC(Photoeye) OTE(M1_Running)
+- Rung 1: [XIC(M2_Start), XIC(M2_Running)] XIO(M2_Stop) XIO(M2_Faulted) XIC(Photoeye) OTE(M2_Running)
+
+Logic: Each motor has a start/stop seal-in circuit. M_Start starts the motor, M_Running latches through the parallel branch. M_Stop and M_Faulted are normally-closed contacts (stop/fault protection). Photoeye must be ON (unblocked) for either motor to run.
+
+The user can ask you questions about how the ladder logic works, request modifications to the HTML/JavaScript code, or ask general PLC programming questions. Keep responses concise and helpful. When suggesting code changes, provide the specific code that should be changed.`;
+
+let chatHistory = [];
+let apiKey = localStorage.getItem('claude_api_key') || '';
+let isSending = false;
+
+function initChat() {
+  const keyInput = document.getElementById('apiKeyInput');
+  const saveBtn = document.getElementById('apiKeySave');
+  const savedLabel = document.getElementById('apiKeySaved');
+  const chatInput = document.getElementById('chatInput');
+  const sendBtn = document.getElementById('chatSendBtn');
+  const statusEl = document.getElementById('chatStatus');
+
+  // Restore saved key
+  if (apiKey) {
+    keyInput.value = apiKey.slice(0, 12) + '...';
+    keyInput.type = 'text';
+    chatInput.disabled = false;
+    sendBtn.disabled = false;
+    statusEl.textContent = 'ready';
+    savedLabel.style.display = 'inline';
+  }
+
+  // Save API key
+  saveBtn.addEventListener('click', () => {
+    const val = keyInput.value.trim();
+    if (val && !val.endsWith('...')) {
+      apiKey = val;
+      localStorage.setItem('claude_api_key', apiKey);
+      keyInput.value = apiKey.slice(0, 12) + '...';
+      keyInput.type = 'text';
+      chatInput.disabled = false;
+      sendBtn.disabled = false;
+      statusEl.textContent = 'ready';
+      savedLabel.style.display = 'inline';
+      setTimeout(() => { savedLabel.style.display = 'none'; }, 2000);
+    }
   });
+
+  // Allow re-editing key
+  keyInput.addEventListener('focus', () => {
+    if (keyInput.value.endsWith('...')) {
+      keyInput.value = '';
+      keyInput.type = 'password';
+    }
+  });
+  keyInput.addEventListener('blur', () => {
+    if (!keyInput.value.trim() && apiKey) {
+      keyInput.value = apiKey.slice(0, 12) + '...';
+      keyInput.type = 'text';
+    }
+  });
+
+  // Send on Enter
+  chatInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      sendMessage();
+    }
+  });
+  sendBtn.addEventListener('click', sendMessage);
+}
+
+function addChatBubble(role, text) {
+  const messagesDiv = document.getElementById('chatMessages');
+  const bubble = document.createElement('div');
+  bubble.className = `chat-bubble ${role}`;
+  bubble.textContent = text;
+  messagesDiv.appendChild(bubble);
+  messagesDiv.scrollTop = messagesDiv.scrollHeight;
+  return bubble;
+}
+
+function showTyping() {
+  const messagesDiv = document.getElementById('chatMessages');
+  const indicator = document.createElement('div');
+  indicator.className = 'typing-indicator';
+  indicator.id = 'typingIndicator';
+  indicator.innerHTML = '<span>.</span><span>.</span><span>.</span>';
+  messagesDiv.appendChild(indicator);
+  messagesDiv.scrollTop = messagesDiv.scrollHeight;
+}
+
+function hideTyping() {
+  const ind = document.getElementById('typingIndicator');
+  if (ind) ind.remove();
+}
+
+async function sendMessage(overrideText) {
+  if (isSending) return;
+  const input = document.getElementById('chatInput');
+  const sendBtn = document.getElementById('chatSendBtn');
+  const statusEl = document.getElementById('chatStatus');
+  const userText = overrideText || input.value.trim();
+  if (!userText || !apiKey) return;
+
+  // Add user message
+  input.value = '';
+  addChatBubble('user', userText);
+  chatHistory.push({ role: 'user', content: userText });
+
+  isSending = true;
+  sendBtn.disabled = true;
+  input.disabled = true;
+  statusEl.textContent = 'thinking...';
+  showTyping();
+
+  try {
+    const resp = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true',
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 4096,
+        system: CHAT_SYSTEM_PROMPT,
+        messages: chatHistory,
+      }),
+    });
+
+    hideTyping();
+
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({}));
+      const msg = err.error?.message || `API error ${resp.status}`;
+      addChatBubble('error', msg);
+      statusEl.textContent = 'error';
+    } else {
+      const data = await resp.json();
+      const assistantText = data.content?.[0]?.text || '(no response)';
+      addChatBubble('assistant', assistantText);
+      chatHistory.push({ role: 'assistant', content: assistantText });
+      statusEl.textContent = 'ready';
+    }
+  } catch (err) {
+    hideTyping();
+    addChatBubble('error', `Network error: ${err.message}`);
+    statusEl.textContent = 'error';
+  } finally {
+    isSending = false;
+    sendBtn.disabled = false;
+    input.disabled = false;
+    input.focus();
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// DEMO LOADER (generates HTML via Claude, then hot-swaps the page)
+// ═══════════════════════════════════════════════════════════════
+const DEMO_SYSTEM_PROMPT = `You are a code generator for interactive PLC ladder logic simulator web pages.
+
+RULES:
+- Output ONLY a single html code block with the COMPLETE, self-contained HTML file. Nothing else.
+- Do NOT output L5X files, explanations, or any text outside the code block.
+- The HTML must be fully functional — paste-into-browser ready.
+
+REQUIRED ARCHITECTURE (must match exactly):
+- SVG-based ladder logic rendered every 50ms PLC scan cycle
+- Double-click toggles input contacts (use pointerdown with 500ms double-click tracker — required because SVG rebuilds every 50ms destroy elements before click fires)
+- Forced indicator: green highlight rect on contacts that were manually toggled (forced[tag] = tags[tag])
+- Right sidebar (320px) with:
+  1. I/O Status table (Tag | Type | State) with color-coded type badges (Input=green, Output=blue, Sensor=purple) and state dots
+  2. Claude Chat panel: API key input (stored in localStorage as 'claude_api_key'), message area, send button, Anthropic API direct browser call with 'anthropic-dangerous-direct-browser-access' header
+- Two demo buttons in the title area: "Load Light Demo" and "Load Motor Demo" — each calls loadDemo('light') or loadDemo('motor') which sends a generation prompt to Claude, extracts the HTML from the response, and replaces the page via document.open/write/close
+- Flexbox page layout (.page-wrapper), responsive stacking below 900px
+- Visual style: #2d5aa0 blue theme, #f5f5f0 background, white panels with rounded borders, pill-shaped badges
+
+DRAWING FUNCTIONS needed:
+- drawXIC(g, tag, val, pwr, cy) — normally-open contact with vertical bars
+- drawXIO(g, tag, val, pwr, cy) — normally-closed contact with diagonal slash
+- drawOTE(g, tag, on, pwr, cy) — output energize with ellipse
+- For Light Demo also: drawOTL, drawOTU (latch/unlatch with L/U in circle), drawTON (timer block), drawRES (reset)`;
+
+const DEMO_PROMPTS = {
+  light: `Generate a "Switch/Light/Strobe Demo" ladder logic simulator HTML file.
+
+Program (8 rungs):
+- Tags: Switch1, Switch2, Switch3, Strobe1, Light1, Light2, Light3, FlashBit, FlashOn (timer), FlashOff (timer)
+- Rung 0: XIC(Strobe1) XIO(FlashBit) TON(FlashOn, 1000ms) — ON-phase timer
+- Rung 1: XIC(FlashOn.DN) OTL(FlashBit) — Latch FlashBit when ON-phase done
+- Rung 2: XIC(Strobe1) XIC(FlashBit) TON(FlashOff, 1000ms) — OFF-phase timer
+- Rung 3: XIC(FlashOff.DN) OTU(FlashBit) — Unlatch FlashBit when OFF-phase done
+- Rung 4: XIC(Switch1) XIC(FlashBit) OTE(Light1) — Switch1 controls Light1
+- Rung 5: XIC(Switch2) XIC(FlashBit) OTE(Light2) — Switch2 controls Light2
+- Rung 6: XIC(Switch3) XIC(FlashBit) OTE(Light3) — Switch3 controls Light3
+- Rung 7: XIO(Strobe1) RES(FlashOn) RES(FlashOff) — Reset timers when strobe off
+
+When Strobe1 is OFF, FlashBit stays OFF and lights stay off. Switches only work when Strobe1 is ON and FlashBit is cycling.
+
+Title: "Interactive Ladder Logic Simulator"
+Subtitle: "Switch / Light / Strobe Program | 8 Rungs | Real-Time PLC Scan"`,
+
+  motor: `Generate a "Motor Start/Stop Demo" ladder logic simulator HTML file.
+
+Program (2 rungs):
+- Tags: M1_Start, M1_Stop, M1_Running, M1_Faulted, M2_Start, M2_Stop, M2_Running, M2_Faulted, Photoeye
+- Rung 0: [XIC(M1_Start) || XIC(M1_Running)] XIO(M1_Stop) XIO(M1_Faulted) XIC(Photoeye) OTE(M1_Running)
+- Rung 1: [XIC(M2_Start) || XIC(M2_Running)] XIO(M2_Stop) XIO(M2_Faulted) XIC(Photoeye) OTE(M2_Running)
+
+Each motor has a start/stop seal-in circuit with parallel branches for the latch. M_Stop and M_Faulted are normally-closed. Photoeye is shared — must be ON for either motor to run.
+
+Title: "Interactive Ladder Logic Simulator"
+Subtitle: "Motor Start/Stop Program | 2 Rungs | Real-Time PLC Scan"`,
+};
+
+async function loadDemo(type) {
+  if (isSending) return;
+  if (!apiKey) {
+    addChatBubble('system', 'Please save your API key first to use demo prompts.');
+    return;
+  }
+
+  const label = type === 'light' ? 'Light Demo' : 'Motor Demo';
+  addChatBubble('user', `Load ${label}`);
+
+  isSending = true;
+  const sendBtn = document.getElementById('chatSendBtn');
+  const input = document.getElementById('chatInput');
+  const statusEl = document.getElementById('chatStatus');
+  sendBtn.disabled = true;
+  input.disabled = true;
+  statusEl.textContent = 'generating...';
+  showTyping();
+
+  // Disable demo buttons while generating
+  document.getElementById('loadLightDemo').disabled = true;
+  document.getElementById('loadMotorDemo').disabled = true;
+
+  try {
+    const resp = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true',
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 16384,
+        system: DEMO_SYSTEM_PROMPT,
+        messages: [{ role: 'user', content: DEMO_PROMPTS[type] }],
+      }),
+    });
+
+    hideTyping();
+
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({}));
+      addChatBubble('error', err.error?.message || `API error ${resp.status}`);
+      statusEl.textContent = 'error';
+    } else {
+      const data = await resp.json();
+      const text = data.content?.[0]?.text || '';
+
+      // Extract HTML from ```html code block
+      const htmlMatch = text.match(/```html\s*\n([\s\S]*?)```/);
+      if (htmlMatch && htmlMatch[1] && htmlMatch[1].includes('<html')) {
+        addChatBubble('system', `${label} generated. Reloading...`);
+        // Brief delay so user sees the message
+        await new Promise(r => setTimeout(r, 500));
+        document.open();
+        document.write(htmlMatch[1]);
+        document.close();
+      } else {
+        addChatBubble('error', 'Could not extract valid HTML from response.');
+        addChatBubble('assistant', text);
+        statusEl.textContent = 'ready';
+      }
+    }
+  } catch (err) {
+    hideTyping();
+    addChatBubble('error', `Network error: ${err.message}`);
+    statusEl.textContent = 'error';
+  } finally {
+    isSending = false;
+    sendBtn.disabled = false;
+    input.disabled = false;
+    document.getElementById('loadLightDemo').disabled = false;
+    document.getElementById('loadMotorDemo').disabled = false;
+  }
+}
+
+function initDemoButtons() {
+  document.getElementById('loadLightDemo').addEventListener('click', () => loadDemo('light'));
+  document.getElementById('loadMotorDemo').addEventListener('click', () => loadDemo('motor'));
 }
 
 // ═══════════════════════════════════════════════════════════════
 // INITIALIZE
 // ═══════════════════════════════════════════════════════════════
+buildIOTable();
 createRungDOM();
 plcScan();
 setInterval(plcScan, SCAN_MS);
 const ro = new ResizeObserver(() => { for (let i = 0; i < rungState.length; i++) renderRung(i); });
 ro.observe(document.getElementById('rungs'));
+initChat();
+initDemoButtons();
 </script>
-
-<div style="text-align:center; margin-top:20px; color:#999; font-size:0.7em;">
-  Interactive PLC Ladder Logic Simulator | Real-time scan at 50ms | Double-click contacts to toggle
-</div>
 
 </body>
 </html>
