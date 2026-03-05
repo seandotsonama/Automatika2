@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Interactive Ladder Logic — Motor Start/Stop Simulator</title>
+<title>Interactive Ladder Logic Simulator</title>
 <style>
   :root {
     --bg: #f5f5f0;
@@ -94,14 +94,9 @@
     background: #2d5aa0;
     color: #fff;
   }
-  .demo-btn:active {
-    background: #1e4080;
-    border-color: #1e4080;
+  .demo-btn.active {
+    background: #2d5aa0;
     color: #fff;
-  }
-  .demo-btn:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
   }
 
   /* ═══ Sidebar: I/O Table ═══ */
@@ -150,6 +145,8 @@
   .io-type-input  { background: #e8f5e9; color: #2e7d32; }
   .io-type-output { background: #e3f2fd; color: #1565c0; }
   .io-type-sensor { background: #f3e5f5; color: #7b1fa2; }
+  .io-type-timer  { background: #fff3e0; color: #e65100; }
+  .io-type-internal { background: #fce4ec; color: #c62828; }
   .io-state { display: flex; align-items: center; gap: 5px; font-weight: 500; font-size: 0.95em; }
   .io-dot {
     width: 8px; height: 8px; border-radius: 50%;
@@ -162,6 +159,11 @@
   .io-state.fault-on   .io-dot { background: #ff9933; color: #ff9933; }
   .io-state.running-on .io-dot { background: #3388dd; color: #3388dd; }
   .io-state.sensor-on  .io-dot { background: #9944cc; color: #9944cc; }
+  .io-state.switch-on  .io-dot { background: #33cc33; color: #33cc33; }
+  .io-state.light-on   .io-dot { background: #ffcc00; color: #ffcc00; }
+  .io-state.strobe-on  .io-dot { background: #ff6600; color: #ff6600; }
+  .io-state.timer-on   .io-dot { background: #ff6600; color: #ff6600; }
+  .io-state.internal-on .io-dot { background: #cc3366; color: #cc3366; }
   .io-state.on { color: #222; }
   .io-state.off { color: #aaa; }
 
@@ -328,18 +330,18 @@
 <div class="page-wrapper">
   <!-- ═══ Left: Main Content ═══ -->
   <div class="main-content">
-    <h1>Interactive Ladder Logic Simulator</h1>
-    <div class="subtitle">Motor Start/Stop Program | 2 Rungs | Real-Time PLC Scan</div>
+    <h1 id="pageTitle">Interactive Ladder Logic Simulator</h1>
+    <div class="subtitle" id="pageSubtitle">Motor Start/Stop Program | 2 Rungs | Real-Time PLC Scan</div>
     <div class="instructions">Double-click any input contact to toggle ON / OFF</div>
 
     <div class="demo-buttons">
-      <button class="demo-btn" id="loadLightDemo">Load Light Demo</button>
-      <button class="demo-btn" id="loadMotorDemo">Load Motor Demo</button>
+      <button class="demo-btn active" id="loadMotorDemo">Motor Demo</button>
+      <button class="demo-btn" id="loadLightDemo">Light Demo</button>
     </div>
 
     <div class="scan-info"><span class="scan-dot" id="scanDot"></span> PLC Scan: 50ms cycle</div>
 
-    <div class="legend">
+    <div class="legend" id="legendBar">
       <span><b>Symbols:</b></span>
       <span>&#x2500;| |&#x2500; XIC</span>
       <span>&#x2500;/&#x2500; XIO</span>
@@ -390,71 +392,280 @@
 </div>
 
 <script>
+// ═══════════════════════════════════════════════════════════════
+// CONSTANTS
+// ═══════════════════════════════════════════════════════════════
 const NS = 'http://www.w3.org/2000/svg';
 const WON = '#00cc44';
 const WOFF = '#555';
-const CW = 56;
+const CW = 56;         // standard contact/output width
+const TON_W = 130;     // timer block width
+const SCAN_MS = 50;
 
 // ═══════════════════════════════════════════════════════════════
-// TAG STATE
+// MUTABLE STATE (reset on demo switch)
 // ═══════════════════════════════════════════════════════════════
-const tags = {
-  M1_Start: false, M1_Stop: false, M1_Running: false, M1_Faulted: false,
-  M2_Start: false, M2_Stop: false, M2_Running: false, M2_Faulted: false,
-  Photoeye: false,
+let tags = {};
+let timers = {};
+let ioConfig = [];
+let forced = {};
+let activeDemo = null;
+let scanTimer = null;
+let scanCount = 0;
+const clickTracker = {};
+
+// ═══════════════════════════════════════════════════════════════
+// DEMO CONFIGURATIONS
+// ═══════════════════════════════════════════════════════════════
+const DEMOS = {
+  motor: {
+    title: 'Interactive Ladder Logic Simulator',
+    subtitle: 'Motor Start/Stop Program | 2 Rungs | Real-Time PLC Scan',
+    legendExtra: [],
+    initTags: () => ({
+      M1_Start: false, M1_Stop: false, M1_Running: false, M1_Faulted: false,
+      M2_Start: false, M2_Stop: false, M2_Running: false, M2_Faulted: false,
+      Photoeye: false,
+    }),
+    initTimers: () => ({}),
+    ioConfig: [
+      { tag: 'M1_Start',   type: 'Input',  typeClass: 'input',  stateClass: 'start' },
+      { tag: 'M1_Stop',    type: 'Input',  typeClass: 'input',  stateClass: 'stop' },
+      { tag: 'M1_Faulted', type: 'Input',  typeClass: 'input',  stateClass: 'fault' },
+      { tag: 'M1_Running', type: 'Output', typeClass: 'output', stateClass: 'running' },
+      { tag: 'M2_Start',   type: 'Input',  typeClass: 'input',  stateClass: 'start' },
+      { tag: 'M2_Stop',    type: 'Input',  typeClass: 'input',  stateClass: 'stop' },
+      { tag: 'M2_Faulted', type: 'Input',  typeClass: 'input',  stateClass: 'fault' },
+      { tag: 'M2_Running', type: 'Output', typeClass: 'output', stateClass: 'running' },
+      { tag: 'Photoeye',   type: 'Sensor', typeClass: 'sensor', stateClass: 'sensor' },
+    ],
+    rungDefs: [
+      {
+        comment: 'Motor 1: Start/Stop seal-in with fault protection + photoeye',
+        elements: [
+          { type: 'parallel', branches: [[{type:'XIC',tag:'M1_Start'}],[{type:'XIC',tag:'M1_Running'}]] },
+          { type: 'XIO', tag: 'M1_Stop' },
+          { type: 'XIO', tag: 'M1_Faulted' },
+          { type: 'XIC', tag: 'Photoeye' },
+          { type: 'OTE', tag: 'M1_Running' },
+        ],
+      },
+      {
+        comment: 'Motor 2: Start/Stop seal-in with fault protection + photoeye',
+        elements: [
+          { type: 'parallel', branches: [[{type:'XIC',tag:'M2_Start'}],[{type:'XIC',tag:'M2_Running'}]] },
+          { type: 'XIO', tag: 'M2_Stop' },
+          { type: 'XIO', tag: 'M2_Faulted' },
+          { type: 'XIC', tag: 'Photoeye' },
+          { type: 'OTE', tag: 'M2_Running' },
+        ],
+      },
+    ],
+    scan() {
+      tags.M1_Running = (tags.M1_Start || tags.M1_Running) && !tags.M1_Stop && !tags.M1_Faulted && tags.Photoeye;
+      tags.M2_Running = (tags.M2_Start || tags.M2_Running) && !tags.M2_Stop && !tags.M2_Faulted && tags.Photoeye;
+    },
+  },
+
+  light: {
+    title: 'Interactive Ladder Logic Simulator',
+    subtitle: 'Switch / Light / Strobe Program | 8 Rungs | Real-Time PLC Scan',
+    legendExtra: [
+      { sym: '&#x2500;[L]&#x2500;', label: 'OTL' },
+      { sym: '&#x2500;[U]&#x2500;', label: 'OTU' },
+      { sym: '[TON]', label: 'Timer' },
+      { sym: '[RES]', label: 'Reset' },
+    ],
+    initTags: () => ({
+      Switch1: false, Switch2: false, Switch3: false,
+      Strobe1: false,
+      Light1: false, Light2: false, Light3: false,
+      FlashBit: false,
+    }),
+    initTimers: () => ({
+      FlashOn:  { acc: 0, dn: false, preset: 1000 },
+      FlashOff: { acc: 0, dn: false, preset: 1000 },
+    }),
+    ioConfig: [
+      { tag: 'Switch1',  type: 'Input',    typeClass: 'input',    stateClass: 'switch' },
+      { tag: 'Switch2',  type: 'Input',    typeClass: 'input',    stateClass: 'switch' },
+      { tag: 'Switch3',  type: 'Input',    typeClass: 'input',    stateClass: 'switch' },
+      { tag: 'Strobe1',  type: 'Input',    typeClass: 'input',    stateClass: 'strobe' },
+      { tag: 'Light1',   type: 'Output',   typeClass: 'output',   stateClass: 'light' },
+      { tag: 'Light2',   type: 'Output',   typeClass: 'output',   stateClass: 'light' },
+      { tag: 'Light3',   type: 'Output',   typeClass: 'output',   stateClass: 'light' },
+      { tag: 'FlashBit', type: 'Internal', typeClass: 'internal', stateClass: 'internal' },
+      { tag: 'FlashOn',  type: 'Timer',    typeClass: 'timer',    stateClass: 'timer', isTimer: true },
+      { tag: 'FlashOff', type: 'Timer',    typeClass: 'timer',    stateClass: 'timer', isTimer: true },
+    ],
+    rungDefs: [
+      {
+        comment: 'Strobe ON-phase: XIC(Strobe1) XIO(FlashBit) TON(FlashOn, 1000ms)',
+        elements: [
+          { type: 'XIC', tag: 'Strobe1' },
+          { type: 'XIO', tag: 'FlashBit' },
+          { type: 'TON', tag: 'FlashOn' },
+        ],
+      },
+      {
+        comment: 'Latch FlashBit when ON-phase timer done',
+        elements: [
+          { type: 'XIC', tag: 'FlashOn.DN' },
+          { type: 'OTL', tag: 'FlashBit' },
+        ],
+      },
+      {
+        comment: 'Strobe OFF-phase: XIC(Strobe1) XIC(FlashBit) TON(FlashOff, 1000ms)',
+        elements: [
+          { type: 'XIC', tag: 'Strobe1' },
+          { type: 'XIC', tag: 'FlashBit' },
+          { type: 'TON', tag: 'FlashOff' },
+        ],
+      },
+      {
+        comment: 'Unlatch FlashBit when OFF-phase timer done',
+        elements: [
+          { type: 'XIC', tag: 'FlashOff.DN' },
+          { type: 'OTU', tag: 'FlashBit' },
+        ],
+      },
+      {
+        comment: 'Switch1 controls Light1 (requires FlashBit ON)',
+        elements: [
+          { type: 'XIC', tag: 'Switch1' },
+          { type: 'XIC', tag: 'FlashBit' },
+          { type: 'OTE', tag: 'Light1' },
+        ],
+      },
+      {
+        comment: 'Switch2 controls Light2 (requires FlashBit ON)',
+        elements: [
+          { type: 'XIC', tag: 'Switch2' },
+          { type: 'XIC', tag: 'FlashBit' },
+          { type: 'OTE', tag: 'Light2' },
+        ],
+      },
+      {
+        comment: 'Switch3 controls Light3 (requires FlashBit ON)',
+        elements: [
+          { type: 'XIC', tag: 'Switch3' },
+          { type: 'XIC', tag: 'FlashBit' },
+          { type: 'OTE', tag: 'Light3' },
+        ],
+      },
+      {
+        comment: 'Reset timers when Strobe OFF',
+        elements: [
+          { type: 'XIO', tag: 'Strobe1' },
+          { type: 'RES', tag: 'FlashOn' },
+          { type: 'RES', tag: 'FlashOff' },
+        ],
+      },
+    ],
+    scan() {
+      // Rung 0: Strobe ON-phase timer
+      const r0pwr = tags.Strobe1 && !tags.FlashBit;
+      updateTimer('FlashOn', r0pwr);
+
+      // Rung 1: Latch FlashBit
+      if (timers.FlashOn.dn) tags.FlashBit = true;
+
+      // Rung 2: Strobe OFF-phase timer
+      const r2pwr = tags.Strobe1 && tags.FlashBit;
+      updateTimer('FlashOff', r2pwr);
+
+      // Rung 3: Unlatch FlashBit
+      if (timers.FlashOff.dn) tags.FlashBit = false;
+
+      // Rungs 4-6: Switch → Light (gated by FlashBit)
+      tags.Light1 = tags.Switch1 && tags.FlashBit;
+      tags.Light2 = tags.Switch2 && tags.FlashBit;
+      tags.Light3 = tags.Switch3 && tags.FlashBit;
+
+      // Rung 7: Reset timers when strobe is off
+      if (!tags.Strobe1) {
+        timers.FlashOn.acc = 0;  timers.FlashOn.dn = false;
+        timers.FlashOff.acc = 0; timers.FlashOff.dn = false;
+      }
+    },
+  },
 };
 
 // ═══════════════════════════════════════════════════════════════
-// I/O TABLE CONFIG
+// TIMER HELPER
 // ═══════════════════════════════════════════════════════════════
-const ioConfig = [
-  { tag: 'M1_Start',   type: 'Input',  typeClass: 'input',  stateClass: 'start' },
-  { tag: 'M1_Stop',    type: 'Input',  typeClass: 'input',  stateClass: 'stop' },
-  { tag: 'M1_Faulted', type: 'Input',  typeClass: 'input',  stateClass: 'fault' },
-  { tag: 'M1_Running', type: 'Output', typeClass: 'output', stateClass: 'running' },
-  { tag: 'M2_Start',   type: 'Input',  typeClass: 'input',  stateClass: 'start' },
-  { tag: 'M2_Stop',    type: 'Input',  typeClass: 'input',  stateClass: 'stop' },
-  { tag: 'M2_Faulted', type: 'Input',  typeClass: 'input',  stateClass: 'fault' },
-  { tag: 'M2_Running', type: 'Output', typeClass: 'output', stateClass: 'running' },
-  { tag: 'Photoeye',   type: 'Sensor', typeClass: 'sensor', stateClass: 'sensor' },
-];
-
-function buildIOTable() {
-  const tbody = document.getElementById('ioTableBody');
-  ioConfig.forEach(({ tag, type, typeClass }) => {
-    const tr = document.createElement('tr');
-    tr.innerHTML = `
-      <td style="font-weight:500">${tag}</td>
-      <td><span class="io-type-badge io-type-${typeClass}">${type}</span></td>
-      <td><div class="io-state off" id="io-${tag}"><span class="io-dot"></span> OFF</div></td>
-    `;
-    tbody.appendChild(tr);
-  });
+function updateTimer(name, enabled) {
+  const t = timers[name];
+  if (!t) return;
+  if (enabled) {
+    if (!t.dn) {
+      t.acc += SCAN_MS;
+      if (t.acc >= t.preset) { t.acc = t.preset; t.dn = true; }
+    }
+  } else {
+    t.acc = 0;
+    t.dn = false;
+  }
 }
 
-function updateIOTable() {
-  ioConfig.forEach(({ tag, stateClass }) => {
-    const el = document.getElementById(`io-${tag}`);
-    if (!el) return;
-    const on = tags[tag];
-    el.className = 'io-state ' + (on ? `on ${stateClass}-on` : 'off');
-    el.innerHTML = `<span class="io-dot"></span> ${on ? 'ON' : 'OFF'}`;
-  });
+// ═══════════════════════════════════════════════════════════════
+// TAG VALUE HELPERS
+// ═══════════════════════════════════════════════════════════════
+function getTagValue(name) {
+  // Handle timer .DN attributes
+  if (name.endsWith('.DN')) {
+    const tName = name.slice(0, -3);
+    return timers[tName] ? timers[tName].dn : false;
+  }
+  return !!tags[name];
+}
+
+function isToggleable(tag) {
+  // Timer attributes and timer tags are not toggleable
+  if (tag.endsWith('.DN')) return false;
+  if (timers[tag]) return false;
+  // Outputs & internal bits are not user-toggleable
+  const io = ioConfig.find(c => c.tag === tag);
+  if (io && (io.type === 'Output' || io.type === 'Internal')) return false;
+  return true;
+}
+
+function getElemWidth(type) {
+  if (type === 'TON') return TON_W;
+  return CW;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// POWER FLOW EVALUATION
+// ═══════════════════════════════════════════════════════════════
+function evalPower(elem, pwr) {
+  if (!pwr) return false;
+  if (elem.type === 'XIC') return getTagValue(elem.tag);
+  if (elem.type === 'XIO') return !getTagValue(elem.tag);
+  if (elem.type === 'parallel') {
+    return elem.branches.some(branch => {
+      let p = pwr;
+      for (const e of branch) p = evalPower(e, p);
+      return p;
+    });
+  }
+  // OTE, OTL, OTU, TON, RES pass power through
+  return pwr;
 }
 
 // ═══════════════════════════════════════════════════════════════
 // SVG HELPERS
 // ═══════════════════════════════════════════════════════════════
-function el(tag, attrs) {
+function svgEl(tag, attrs) {
   const e = document.createElementNS(NS, tag);
   for (const [k, v] of Object.entries(attrs || {})) e.setAttribute(k, v);
   return e;
 }
 function ln(x1, y1, x2, y2, stroke, sw) {
-  return el('line', { x1, y1, x2, y2, stroke, 'stroke-width': sw || 2, 'stroke-linecap': 'round' });
+  return svgEl('line', { x1, y1, x2, y2, stroke, 'stroke-width': sw || 2, 'stroke-linecap': 'round' });
 }
 function txt(x, y, text, opts = {}) {
-  const t = el('text', {
+  const t = svgEl('text', {
     x, y, fill: opts.fill || '#333',
     'font-size': opts.size || 10,
     'font-family': opts.font || "'Segoe UI', Arial, sans-serif",
@@ -469,11 +680,12 @@ function txt(x, y, text, opts = {}) {
 // SYMBOL DRAWING FUNCTIONS
 // ═══════════════════════════════════════════════════════════════
 function drawXIC(g, tag, val, pwr, cy) {
-  if (forced[tag]) {
-    g.appendChild(el('rect', { x: -4, y: cy-30, width: CW+8, height: 60, rx: 6, fill: '#d4f5d4', stroke: '#66bb66', 'stroke-width': 1.5, opacity: '0.7' }));
+  const baseTag = tag.endsWith('.DN') ? tag.slice(0, -3) : tag;
+  if (forced[baseTag]) {
+    g.appendChild(svgEl('rect', { x: -4, y: cy-30, width: CW+8, height: 60, rx: 6, fill: '#d4f5d4', stroke: '#66bb66', 'stroke-width': 1.5, opacity: '0.7' }));
   }
   const col = val ? '#1a7a1a' : '#333';
-  g.appendChild(txt(CW/2, cy - 20, tag, { fill: col, size: 11, bold: val }));
+  g.appendChild(txt(CW/2, cy - 20, tag, { fill: col, size: tag.length > 8 ? 9 : 11, bold: val }));
   g.appendChild(txt(CW/2, cy + 24, val ? '(ON)' : '(OFF)', { fill: val ? '#1a7a1a' : '#999', size: 8 }));
   g.appendChild(ln(0, cy, 14, cy, pwr ? WON : WOFF, 2.5));
   g.appendChild(ln(CW-14, cy, CW, cy, (pwr && val) ? WON : WOFF, 2.5));
@@ -483,11 +695,11 @@ function drawXIC(g, tag, val, pwr, cy) {
 
 function drawXIO(g, tag, val, pwr, cy) {
   if (forced[tag]) {
-    g.appendChild(el('rect', { x: -4, y: cy-30, width: CW+8, height: 60, rx: 6, fill: '#d4f5d4', stroke: '#66bb66', 'stroke-width': 1.5, opacity: '0.7' }));
+    g.appendChild(svgEl('rect', { x: -4, y: cy-30, width: CW+8, height: 60, rx: 6, fill: '#d4f5d4', stroke: '#66bb66', 'stroke-width': 1.5, opacity: '0.7' }));
   }
   const passing = !val;
   const col = passing ? '#1a7a1a' : '#993333';
-  g.appendChild(txt(CW/2, cy - 20, tag, { fill: col, size: 11, bold: passing }));
+  g.appendChild(txt(CW/2, cy - 20, tag, { fill: col, size: tag.length > 8 ? 9 : 11, bold: passing }));
   g.appendChild(txt(CW/2, cy + 24, passing ? '(PASS)' : '(BLOCKED)', { fill: col, size: 7 }));
   g.appendChild(ln(0, cy, 14, cy, pwr ? WON : WOFF, 2.5));
   g.appendChild(ln(CW-14, cy, CW, cy, (pwr && passing) ? WON : WOFF, 2.5));
@@ -501,53 +713,191 @@ const MOTOR_COLOR = { on: '#3388dd', glow: '#3388dd', stroke: '#1a5599', label: 
 function drawOTE(g, tag, on, pwr, cy) {
   const w = pwr ? WON : WOFF;
   const c = MOTOR_COLOR;
-  g.appendChild(txt(CW/2, cy - 20, tag, { fill: on ? c.label : c.offStroke, size: 11, bold: on }));
+  g.appendChild(txt(CW/2, cy - 20, tag, { fill: on ? c.label : c.offStroke, size: tag.length > 8 ? 9 : 11, bold: on }));
   g.appendChild(txt(CW/2, cy + 24, on ? '(RUN)' : '(OFF)', { fill: on ? c.label : '#999', size: 8 }));
   g.appendChild(ln(0, cy, 10, cy, w, 2.5));
   if (on) {
-    g.appendChild(el('ellipse', { cx: CW/2, cy, rx: 18, ry: 16, fill: c.glow, opacity: '0.3' }));
-    g.appendChild(el('ellipse', { cx: CW/2, cy, rx: 14, ry: 12, fill: c.on, stroke: c.stroke, 'stroke-width': 2.5 }));
+    g.appendChild(svgEl('ellipse', { cx: CW/2, cy, rx: 18, ry: 16, fill: c.glow, opacity: '0.3' }));
+    g.appendChild(svgEl('ellipse', { cx: CW/2, cy, rx: 14, ry: 12, fill: c.on, stroke: c.stroke, 'stroke-width': 2.5 }));
   } else {
-    g.appendChild(el('ellipse', { cx: CW/2, cy, rx: 14, ry: 12, fill: c.off, stroke: c.offStroke, 'stroke-width': 2 }));
+    g.appendChild(svgEl('ellipse', { cx: CW/2, cy, rx: 14, ry: 12, fill: c.off, stroke: c.offStroke, 'stroke-width': 2 }));
   }
   g.appendChild(ln(CW-10, cy, CW, cy, w, 2.5));
 }
 
+function drawOTL(g, tag, on, pwr, cy) {
+  const w = pwr ? WON : WOFF;
+  const col = on ? '#2d5aa0' : '#666';
+  g.appendChild(txt(CW/2, cy - 20, tag, { fill: col, size: tag.length > 8 ? 9 : 11, bold: on }));
+  g.appendChild(txt(CW/2, cy + 24, on ? '(SET)' : '(OFF)', { fill: on ? '#2d5aa0' : '#999', size: 8 }));
+  g.appendChild(ln(0, cy, 10, cy, w, 2.5));
+  if (on && pwr) {
+    g.appendChild(svgEl('ellipse', { cx: CW/2, cy, rx: 14, ry: 12, fill: '#cce0ff', stroke: '#2d5aa0', 'stroke-width': 2.5 }));
+  } else {
+    g.appendChild(svgEl('ellipse', { cx: CW/2, cy, rx: 14, ry: 12, fill: '#f0f0f0', stroke: '#888', 'stroke-width': 2 }));
+  }
+  g.appendChild(txt(CW/2, cy, 'L', { fill: pwr && on ? '#2d5aa0' : '#888', size: 12, bold: true }));
+  g.appendChild(ln(CW-10, cy, CW, cy, w, 2.5));
+}
+
+function drawOTU(g, tag, on, pwr, cy) {
+  const w = pwr ? WON : WOFF;
+  const col = !on ? '#993333' : '#666';
+  g.appendChild(txt(CW/2, cy - 20, tag, { fill: col, size: tag.length > 8 ? 9 : 11, bold: pwr }));
+  g.appendChild(txt(CW/2, cy + 24, !on ? '(CLR)' : '(SET)', { fill: pwr ? '#993333' : '#999', size: 8 }));
+  g.appendChild(ln(0, cy, 10, cy, w, 2.5));
+  if (pwr) {
+    g.appendChild(svgEl('ellipse', { cx: CW/2, cy, rx: 14, ry: 12, fill: '#ffe0e0', stroke: '#993333', 'stroke-width': 2.5 }));
+  } else {
+    g.appendChild(svgEl('ellipse', { cx: CW/2, cy, rx: 14, ry: 12, fill: '#f0f0f0', stroke: '#888', 'stroke-width': 2 }));
+  }
+  g.appendChild(txt(CW/2, cy, 'U', { fill: pwr ? '#993333' : '#888', size: 12, bold: true }));
+  g.appendChild(ln(CW-10, cy, CW, cy, w, 2.5));
+}
+
+function drawTON(g, timerTag, pwr, cy) {
+  const t = timers[timerTag];
+  if (!t) return;
+  const bw = TON_W;
+  const bh = 50;
+  const bx = 0;
+  const by = cy - bh/2;
+  const col = pwr ? '#2d5aa0' : '#888';
+  const bg = pwr ? '#e8f0ff' : '#f5f5f5';
+
+  // Wire in
+  g.appendChild(ln(0, cy, 5, cy, pwr ? WON : WOFF, 2.5));
+  // Box
+  g.appendChild(svgEl('rect', { x: 5, y: by, width: bw - 10, height: bh, rx: 5, fill: bg, stroke: col, 'stroke-width': 2 }));
+  // Label
+  g.appendChild(txt(bw/2, by + 12, `TON: ${timerTag}`, { fill: col, size: 10, bold: pwr }));
+  // Preset
+  g.appendChild(txt(bw/2, by + 24, `PRE: ${t.preset}ms`, { fill: '#666', size: 8 }));
+  // Progress bar background
+  const pbX = 15, pbY = by + 32, pbW = bw - 30, pbH = 8;
+  g.appendChild(svgEl('rect', { x: pbX, y: pbY, width: pbW, height: pbH, rx: 3, fill: '#ddd' }));
+  // Progress bar fill
+  const pct = Math.min(t.acc / t.preset, 1);
+  if (pct > 0) {
+    g.appendChild(svgEl('rect', { x: pbX, y: pbY, width: pbW * pct, height: pbH, rx: 3, fill: t.dn ? WON : '#ffaa00' }));
+  }
+  // ACC text
+  g.appendChild(txt(bw/2, by + 46, `ACC: ${t.acc}ms ${t.dn ? '(DN)' : ''}`, { fill: t.dn ? '#1a7a1a' : '#666', size: 8, bold: t.dn }));
+  // Wire out
+  g.appendChild(ln(bw - 5, cy, bw, cy, pwr ? WON : WOFF, 2.5));
+}
+
+function drawRES(g, timerTag, pwr, cy) {
+  const bw = CW;
+  const bh = 30;
+  const by = cy - bh/2;
+  const col = pwr ? '#993333' : '#888';
+
+  g.appendChild(ln(0, cy, 8, cy, pwr ? WON : WOFF, 2.5));
+  g.appendChild(svgEl('rect', { x: 8, y: by, width: bw - 16, height: bh, rx: 4, fill: pwr ? '#ffe0e0' : '#f5f5f5', stroke: col, 'stroke-width': 2 }));
+  g.appendChild(txt(bw/2, cy - 6, 'RES', { fill: col, size: 9, bold: pwr }));
+  g.appendChild(txt(bw/2, cy + 7, timerTag, { fill: col, size: 8 }));
+  g.appendChild(ln(bw - 8, cy, bw, cy, pwr ? WON : WOFF, 2.5));
+}
+
 // ═══════════════════════════════════════════════════════════════
-// RUNG SPECS AND DOM
+// I/O TABLE
 // ═══════════════════════════════════════════════════════════════
-const rungSpecs = [
-  { start: 'M1_Start', running: 'M1_Running', stop: 'M1_Stop', fault: 'M1_Faulted', pe: 'Photoeye', comment: 'Motor 1: Start/Stop seal-in with fault protection + photoeye' },
-  { start: 'M2_Start', running: 'M2_Running', stop: 'M2_Stop', fault: 'M2_Faulted', pe: 'Photoeye', comment: 'Motor 2: Start/Stop seal-in with fault protection + photoeye' },
-];
-const rungState = [];
+function buildIOTable() {
+  const tbody = document.getElementById('ioTableBody');
+  tbody.innerHTML = '';
+  ioConfig.forEach(({ tag, type, typeClass, isTimer }) => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td style="font-weight:500">${tag}</td>
+      <td><span class="io-type-badge io-type-${typeClass}">${type}</span></td>
+      <td><div class="io-state off" id="io-${tag}"><span class="io-dot"></span> OFF</div></td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+function updateIOTable() {
+  ioConfig.forEach(({ tag, stateClass, isTimer }) => {
+    const el = document.getElementById(`io-${tag}`);
+    if (!el) return;
+    let on;
+    if (isTimer && timers[tag]) {
+      on = timers[tag].dn;
+    } else {
+      on = !!tags[tag];
+    }
+    el.className = 'io-state ' + (on ? `on ${stateClass}-on` : 'off');
+    if (isTimer && timers[tag]) {
+      el.innerHTML = `<span class="io-dot"></span> ${timers[tag].acc}/${timers[tag].preset}ms${timers[tag].dn ? ' DN' : ''}`;
+    } else {
+      el.innerHTML = `<span class="io-dot"></span> ${on ? 'ON' : 'OFF'}`;
+    }
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════
+// TOGGLE HELPER (pointerdown survives 50ms SVG rebuilds)
+// ═══════════════════════════════════════════════════════════════
+function addToggle(g, tag, cy) {
+  const baseTag = tag.endsWith('.DN') ? tag.slice(0, -3) : tag;
+  if (!isToggleable(baseTag)) return;
+  g.setAttribute('class', 'clickable');
+  const hitW = getElemWidth(null); // always CW for contacts
+  const r = svgEl('rect', { x: 0, y: cy-22, width: CW, height: 44, fill: 'transparent', cursor: 'pointer' });
+  g.appendChild(r);
+  g.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const now = Date.now();
+    if (clickTracker[baseTag] && (now - clickTracker[baseTag]) < 500) {
+      tags[baseTag] = !tags[baseTag];
+      forced[baseTag] = tags[baseTag];
+      clickTracker[baseTag] = 0;
+    } else {
+      clickTracker[baseTag] = now;
+    }
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════
+// GENERIC RUNG RENDERER
+// ═══════════════════════════════════════════════════════════════
+let rungBodies = [];
 
 function createRungDOM() {
   const container = document.getElementById('rungs');
-  rungSpecs.forEach((spec, i) => {
+  container.innerHTML = '';
+  rungBodies = [];
+  activeDemo.rungDefs.forEach((def, i) => {
     const rc = document.createElement('div');
     rc.className = 'rung-container';
     const hdr = document.createElement('div');
     hdr.className = 'rung-header';
-    hdr.innerHTML = `<span class="rung-num">${i}</span><span class="rung-comment">${spec.comment}</span>`;
+    hdr.innerHTML = `<span class="rung-num">${i}</span><span class="rung-comment">${def.comment}</span>`;
     rc.appendChild(hdr);
     const body = document.createElement('div');
     body.className = 'rung-body';
     rc.appendChild(body);
     container.appendChild(rc);
-    const div = document.createElement('div');
-    div.className = 'rung';
-    body.appendChild(div);
-    rungState.push({ div, body, spec });
+    rungBodies.push(body);
   });
 }
 
 function renderRung(idx) {
-  const rs = rungState[idx];
-  const { body, spec } = rs;
+  const def = activeDemo.rungDefs[idx];
+  const body = rungBodies[idx];
+  if (!body) return;
   const W = body.clientWidth || 900;
+  const elements = def.elements;
+
+  // Calculate height based on whether there are parallel branches
+  let maxBranches = 1;
+  elements.forEach(e => {
+    if (e.type === 'parallel') maxBranches = Math.max(maxBranches, e.branches.length);
+  });
   const cy = 58;
-  const brSp = 60;
+  const brSp = maxBranches > 1 ? 60 : 0;
   const H = cy + brSp + 40;
 
   const svg = document.createElementNS(NS, 'svg');
@@ -556,82 +906,137 @@ function renderRung(idx) {
   svg.appendChild(ln(0, 0, 0, H, '#333', 3));
   svg.appendChild(ln(W, 0, W, H, '#333', 3));
 
-  const startOn = tags[spec.start];
-  const runningOn = tags[spec.running];
-  const stopOn = tags[spec.stop];
-  const faultOn = tags[spec.fault];
-  const peOn = tags[spec.pe];
+  // Compute fractional widths for each element
+  const fracs = elements.map(e => {
+    if (e.type === 'TON') return 2.5;
+    if (e.type === 'parallel') return Math.max(...e.branches.map(b => b.length)) * 1.3;
+    return 1;
+  });
+  const totalFrac = fracs.reduce((a, b) => a + b, 0);
 
-  // Branch power: M_Start OR M_Running (seal-in)
-  const branchPwr = startOn || runningOn;
-  // After stop (NC): passes when Stop is OFF
-  const afterStop = branchPwr && !stopOn;
-  // After fault (NC): passes when Faulted is OFF
-  const afterFault = afterStop && !faultOn;
-  // After photoeye (NO): passes when Photoeye is ON (unblocked)
-  const afterPE = afterFault && peOn;
-  const energized = afterPE;
+  // Compute power at each stage
+  const pwrBefore = [];
+  const pwrAfter = [];
+  let pwr = true;
+  for (let i = 0; i < elements.length; i++) {
+    pwrBefore.push(pwr);
+    pwr = evalPower(elements[i], pwr);
+    pwrAfter.push(pwr);
+  }
+  const rungEnergized = pwrAfter[pwrAfter.length - 1];
 
-  // ── Parallel branch: XIC(M_Start) top, XIC(M_Running) bottom ──
-  const bx = W * 0.05;
-  const bEnd = W * 0.22;
-  const y0 = cy, y1 = cy + brSp;
+  // Available width (with some margin for rails)
+  const margin = 10;
+  const usableW = W - margin * 2;
 
-  // Left rail to branch start
-  svg.appendChild(ln(4, cy, bx, cy, WON, 2.5));
+  // Draw each element
+  let xPos = margin;
+  for (let i = 0; i < elements.length; i++) {
+    const e = elements[i];
+    const sliceW = (fracs[i] / totalFrac) * usableW;
+    const ePwr = pwrBefore[i];
+    const eOut = pwrAfter[i];
 
-  // Vertical branch lines
-  svg.appendChild(ln(bx, y0, bx, y1, WON, 2));
-  svg.appendChild(ln(bEnd, y0, bEnd, y1, branchPwr ? WON : WOFF, 2));
+    if (e.type === 'parallel') {
+      // Draw parallel branches
+      const branches = e.branches;
+      const branchStartX = xPos;
+      const branchEndX = xPos + sliceW;
+      const brSpacing = 60;
 
-  // Top branch: XIC(M_Start)
-  const gStart = el('g', { transform: `translate(${(bx+bEnd)/2 - CW/2}, 0)`, class: 'clickable' });
-  drawXIC(gStart, spec.start, startOn, true, y0);
-  addToggle(gStart, spec.start, y0);
-  svg.appendChild(gStart);
-  const startPwr = startOn;
-  svg.appendChild(ln(bx, y0, (bx+bEnd)/2 - CW/2, y0, WON, 2.5));
-  svg.appendChild(ln((bx+bEnd)/2 + CW/2, y0, bEnd, y0, startPwr ? WON : WOFF, 2.5));
+      // Vertical bus lines
+      if (branches.length > 1) {
+        svg.appendChild(ln(branchStartX, cy, branchStartX, cy + (branches.length - 1) * brSpacing, ePwr ? WON : WOFF, 2));
+        // Compute per-branch power for bus end
+        const anyBranch = eOut;
+        svg.appendChild(ln(branchEndX, cy, branchEndX, cy + (branches.length - 1) * brSpacing, anyBranch ? WON : WOFF, 2));
+      }
 
-  // Bottom branch: XIC(M_Running)
-  const gRun = el('g', { transform: `translate(${(bx+bEnd)/2 - CW/2}, 0)` });
-  drawXIC(gRun, spec.running, runningOn, true, y1);
-  svg.appendChild(gRun);
-  const runPwr = runningOn;
-  svg.appendChild(ln(bx, y1, (bx+bEnd)/2 - CW/2, y1, WON, 2.5));
-  svg.appendChild(ln((bx+bEnd)/2 + CW/2, y1, bEnd, y1, runPwr ? WON : WOFF, 2.5));
+      branches.forEach((branch, bi) => {
+        const bCy = cy + bi * brSpacing;
+        // Compute branch power
+        let bPwr = ePwr;
+        const bPwrStages = [bPwr];
+        for (const be of branch) {
+          bPwr = evalPower(be, bPwr);
+          bPwrStages.push(bPwr);
+        }
+        const branchOut = bPwr;
 
-  // ── Series: XIO(M_Stop) ──
-  const stopX = W * 0.28;
-  svg.appendChild(ln(bEnd, y0, stopX, y0, branchPwr ? WON : WOFF, 2.5));
-  const gStop = el('g', { transform: `translate(${stopX}, 0)`, class: 'clickable' });
-  drawXIO(gStop, spec.stop, stopOn, branchPwr, y0);
-  addToggle(gStop, spec.stop, y0);
-  svg.appendChild(gStop);
+        // Layout elements within branch
+        const bUsable = sliceW;
+        const bCount = branch.length;
+        const elemW = bUsable / bCount;
 
-  // ── Series: XIO(M_Faulted) ──
-  const faultX = W * 0.42;
-  svg.appendChild(ln(stopX + CW, y0, faultX, y0, afterStop ? WON : WOFF, 2.5));
-  const gFault = el('g', { transform: `translate(${faultX}, 0)`, class: 'clickable' });
-  drawXIO(gFault, spec.fault, faultOn, afterStop, y0);
-  addToggle(gFault, spec.fault, y0);
-  svg.appendChild(gFault);
+        branch.forEach((be, bei) => {
+          const ex = branchStartX + bei * elemW + (elemW - getElemWidth(be.type)) / 2;
+          const bePwr = bPwrStages[bei];
+          const val = getTagValue(be.tag);
 
-  // ── Series: XIC(Photoeye) ──
-  const peX = W * 0.56;
-  svg.appendChild(ln(faultX + CW, y0, peX, y0, afterFault ? WON : WOFF, 2.5));
-  const gPE = el('g', { transform: `translate(${peX}, 0)`, class: 'clickable' });
-  drawXIC(gPE, spec.pe, peOn, afterFault, y0);
-  addToggle(gPE, spec.pe, y0);
-  svg.appendChild(gPE);
+          // Wire leading in
+          if (bei === 0) {
+            svg.appendChild(ln(branchStartX, bCy, ex, bCy, bePwr ? WON : WOFF, 2.5));
+          }
 
-  // ── Output: OTE(M_Running) ──
-  const oteX = W * 0.78;
-  svg.appendChild(ln(peX + CW, y0, oteX, y0, afterPE ? WON : WOFF, 2.5));
-  const gOTE = el('g', { transform: `translate(${oteX}, 0)` });
-  drawOTE(gOTE, spec.running, energized, afterPE, y0);
-  svg.appendChild(gOTE);
-  svg.appendChild(ln(oteX + CW, y0, W - 4, y0, afterPE ? WON : WOFF, 2.5));
+          const gElem = svgEl('g', { transform: `translate(${ex}, 0)` });
+          if (be.type === 'XIC') {
+            drawXIC(gElem, be.tag, val, bePwr, bCy);
+            addToggle(gElem, be.tag, bCy);
+          } else if (be.type === 'XIO') {
+            drawXIO(gElem, be.tag, val, bePwr, bCy);
+            addToggle(gElem, be.tag, bCy);
+          }
+          svg.appendChild(gElem);
+
+          const beAfter = bPwrStages[bei + 1];
+          // Wire trailing out
+          if (bei === bCount - 1) {
+            svg.appendChild(ln(ex + getElemWidth(be.type), bCy, branchEndX, bCy, beAfter ? WON : WOFF, 2.5));
+          } else {
+            svg.appendChild(ln(ex + getElemWidth(be.type), bCy, branchStartX + (bei + 1) * elemW + (elemW - getElemWidth(branch[bei+1].type)) / 2, bCy, beAfter ? WON : WOFF, 2.5));
+          }
+        });
+      });
+
+      xPos = branchEndX;
+    } else {
+      // Series element
+      const elemW = getElemWidth(e.type);
+      const ex = xPos + (sliceW - elemW) / 2;
+      const val = getTagValue(e.tag);
+
+      // Wire from previous position to element
+      svg.appendChild(ln(xPos, cy, ex, cy, ePwr ? WON : WOFF, 2.5));
+
+      const gElem = svgEl('g', { transform: `translate(${ex}, 0)` });
+      if (e.type === 'XIC') {
+        drawXIC(gElem, e.tag, val, ePwr, cy);
+        addToggle(gElem, e.tag, cy);
+      } else if (e.type === 'XIO') {
+        drawXIO(gElem, e.tag, val, ePwr, cy);
+        addToggle(gElem, e.tag, cy);
+      } else if (e.type === 'OTE') {
+        drawOTE(gElem, e.tag, val, eOut, cy);
+      } else if (e.type === 'OTL') {
+        drawOTL(gElem, e.tag, val, eOut, cy);
+      } else if (e.type === 'OTU') {
+        drawOTU(gElem, e.tag, val, eOut, cy);
+      } else if (e.type === 'TON') {
+        drawTON(gElem, e.tag, ePwr, cy);
+      } else if (e.type === 'RES') {
+        drawRES(gElem, e.tag, ePwr, cy);
+      }
+      svg.appendChild(gElem);
+
+      // Wire from element to next position
+      const nextX = xPos + sliceW;
+      svg.appendChild(ln(ex + elemW, cy, nextX, cy, eOut ? WON : WOFF, 2.5));
+      xPos = nextX;
+    }
+  }
+
+  // Final wire to right rail
+  svg.appendChild(ln(xPos, cy, W - 4, cy, rungEnergized ? WON : WOFF, 2.5));
 
   svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
   svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
@@ -639,66 +1044,118 @@ function renderRung(idx) {
   svg.style.height = 'auto';
 
   const wrapper = document.createElement('div');
-  wrapper.className = energized ? 'rung energized' : 'rung';
+  wrapper.className = rungEnergized ? 'rung energized' : 'rung';
   wrapper.appendChild(svg);
   body.innerHTML = '';
   body.appendChild(wrapper);
-  rs.div = wrapper;
 }
 
 // ═══════════════════════════════════════════════════════════════
-// TOGGLE HELPER (pointerdown survives 50ms SVG rebuilds)
+// DEMO SWITCHING (instant, no API call)
 // ═══════════════════════════════════════════════════════════════
-const clickTracker = {};
-const forced = {};
-function addToggle(g, tag, cy) {
-  const r = el('rect', { x: 0, y: cy-22, width: CW, height: 44, fill: 'transparent', cursor: 'pointer' });
-  g.appendChild(r);
-  g.addEventListener('pointerdown', (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    const now = Date.now();
-    if (clickTracker[tag] && (now - clickTracker[tag]) < 500) {
-      tags[tag] = !tags[tag];
-      forced[tag] = tags[tag];
-      clickTracker[tag] = 0;
-    } else {
-      clickTracker[tag] = now;
-    }
+function switchDemo(type) {
+  const demo = DEMOS[type];
+  if (!demo) return;
+
+  // Stop current scan
+  if (scanTimer) clearInterval(scanTimer);
+
+  // Reset state
+  activeDemo = demo;
+  tags = demo.initTags();
+  timers = demo.initTimers();
+  ioConfig = [...demo.ioConfig];
+  forced = {};
+  scanCount = 0;
+
+  // Update header
+  document.getElementById('pageTitle').textContent = demo.title;
+  document.getElementById('pageSubtitle').textContent = demo.subtitle;
+
+  // Update legend
+  const legendBar = document.getElementById('legendBar');
+  let legendHTML = `
+    <span><b>Symbols:</b></span>
+    <span>&#x2500;| |&#x2500; XIC</span>
+    <span>&#x2500;/&#x2500; XIO</span>
+    <span>&#x2500;( )&#x2500; OTE</span>`;
+  if (demo.legendExtra) {
+    demo.legendExtra.forEach(l => {
+      legendHTML += `<span>${l.sym} ${l.label}</span>`;
+    });
+  }
+  legendHTML += `<span style="color:#00cc44;">&#x25CF;</span><span> = power flowing</span>`;
+  legendBar.innerHTML = legendHTML;
+
+  // Update demo button active states
+  document.querySelectorAll('.demo-btn').forEach(btn => btn.classList.remove('active'));
+  document.getElementById(type === 'motor' ? 'loadMotorDemo' : 'loadLightDemo').classList.add('active');
+
+  // Rebuild DOM
+  buildIOTable();
+  createRungDOM();
+
+  // Start scan
+  plcScan();
+  scanTimer = setInterval(plcScan, SCAN_MS);
+
+  // Observe resize
+  const rungsEl = document.getElementById('rungs');
+  if (window._rungRO) window._rungRO.disconnect();
+  window._rungRO = new ResizeObserver(() => {
+    for (let i = 0; i < rungBodies.length; i++) renderRung(i);
   });
+  window._rungRO.observe(rungsEl);
 }
 
 // ═══════════════════════════════════════════════════════════════
-// PLC SCAN ENGINE (50ms cycle)
+// PLC SCAN ENGINE
 // ═══════════════════════════════════════════════════════════════
-const SCAN_MS = 50;
-let scanCount = 0;
-
 function plcScan() {
-  // Rung 0: [XIC(M1_Start), XIC(M1_Running)] XIO(M1_Stop) XIO(M1_Faulted) XIC(Photoeye) OTE(M1_Running)
-  tags.M1_Running = (tags.M1_Start || tags.M1_Running) && !tags.M1_Stop && !tags.M1_Faulted && tags.Photoeye;
-  // Rung 1: [XIC(M2_Start), XIC(M2_Running)] XIO(M2_Stop) XIO(M2_Faulted) XIC(Photoeye) OTE(M2_Running)
-  tags.M2_Running = (tags.M2_Start || tags.M2_Running) && !tags.M2_Stop && !tags.M2_Faulted && tags.Photoeye;
-
-  for (let i = 0; i < rungState.length; i++) renderRung(i);
+  if (!activeDemo) return;
+  activeDemo.scan();
+  for (let i = 0; i < rungBodies.length; i++) renderRung(i);
   updateIOTable();
   scanCount++;
-  document.getElementById('scanDot').className = 'scan-dot' + (scanCount % 2 === 0 ? ' active' : '');
+  const dot = document.getElementById('scanDot');
+  if (dot) dot.className = 'scan-dot' + (scanCount % 2 === 0 ? ' active' : '');
 }
 
 // ═══════════════════════════════════════════════════════════════
 // CLAUDE CHAT (Anthropic API — direct browser call)
 // ═══════════════════════════════════════════════════════════════
-const CHAT_SYSTEM_PROMPT = `You are an assistant embedded in an interactive PLC ladder logic simulator web page. The page simulates a Motor Start/Stop program with 2 rungs on a ControlLogix 1756-L71.
+function getChatSystemPrompt() {
+  if (!activeDemo) return '';
+  const type = activeDemo === DEMOS.motor ? 'motor' : 'light';
+  if (type === 'motor') {
+    return `You are an assistant embedded in an interactive PLC ladder logic simulator web page. The current demo is the Motor Start/Stop program with 2 rungs on a ControlLogix 1756-L71.
 
 Program Details:
 - Tags: M1_Start, M1_Stop, M1_Running, M1_Faulted, M2_Start, M2_Stop, M2_Running, M2_Faulted, Photoeye
-- Rung 0: [XIC(M1_Start), XIC(M1_Running)] XIO(M1_Stop) XIO(M1_Faulted) XIC(Photoeye) OTE(M1_Running)
-- Rung 1: [XIC(M2_Start), XIC(M2_Running)] XIO(M2_Stop) XIO(M2_Faulted) XIC(Photoeye) OTE(M2_Running)
+- Rung 0: [XIC(M1_Start) || XIC(M1_Running)] XIO(M1_Stop) XIO(M1_Faulted) XIC(Photoeye) OTE(M1_Running)
+- Rung 1: [XIC(M2_Start) || XIC(M2_Running)] XIO(M2_Stop) XIO(M2_Faulted) XIC(Photoeye) OTE(M2_Running)
 
 Logic: Each motor has a start/stop seal-in circuit. M_Start starts the motor, M_Running latches through the parallel branch. M_Stop and M_Faulted are normally-closed contacts (stop/fault protection). Photoeye must be ON (unblocked) for either motor to run.
 
-The user can ask you questions about how the ladder logic works, request modifications to the HTML/JavaScript code, or ask general PLC programming questions. Keep responses concise and helpful. When suggesting code changes, provide the specific code that should be changed.`;
+Keep responses concise and helpful.`;
+  } else {
+    return `You are an assistant embedded in an interactive PLC ladder logic simulator web page. The current demo is the Switch/Light/Strobe program with 8 rungs.
+
+Program Details:
+- Tags: Switch1, Switch2, Switch3, Strobe1, Light1, Light2, Light3, FlashBit
+- Timers: FlashOn (1000ms), FlashOff (1000ms)
+- Rung 0: XIC(Strobe1) XIO(FlashBit) TON(FlashOn) — ON-phase timer
+- Rung 1: XIC(FlashOn.DN) OTL(FlashBit) — Latch FlashBit
+- Rung 2: XIC(Strobe1) XIC(FlashBit) TON(FlashOff) — OFF-phase timer
+- Rung 3: XIC(FlashOff.DN) OTU(FlashBit) — Unlatch FlashBit
+- Rungs 4-6: XIC(SwitchN) XIC(FlashBit) OTE(LightN)
+- Rung 7: XIO(Strobe1) RES(FlashOn) RES(FlashOff)
+
+Logic: Strobe1 enables a 1s on/1s off flash cycle via FlashBit. Switches only illuminate their lights during the FlashBit ON phase. When Strobe1 is OFF, timers reset and all lights go off.
+
+Keep responses concise and helpful.`;
+  }
+}
 
 let chatHistory = [];
 let apiKey = localStorage.getItem('claude_api_key') || '';
@@ -712,7 +1169,6 @@ function initChat() {
   const sendBtn = document.getElementById('chatSendBtn');
   const statusEl = document.getElementById('chatStatus');
 
-  // Restore saved key
   if (apiKey) {
     keyInput.value = apiKey.slice(0, 12) + '...';
     keyInput.type = 'text';
@@ -722,7 +1178,6 @@ function initChat() {
     savedLabel.style.display = 'inline';
   }
 
-  // Save API key
   saveBtn.addEventListener('click', () => {
     const val = keyInput.value.trim();
     if (val && !val.endsWith('...')) {
@@ -738,7 +1193,6 @@ function initChat() {
     }
   });
 
-  // Allow re-editing key
   keyInput.addEventListener('focus', () => {
     if (keyInput.value.endsWith('...')) {
       keyInput.value = '';
@@ -752,7 +1206,6 @@ function initChat() {
     }
   });
 
-  // Send on Enter
   chatInput.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
@@ -787,15 +1240,14 @@ function hideTyping() {
   if (ind) ind.remove();
 }
 
-async function sendMessage(overrideText) {
+async function sendMessage() {
   if (isSending) return;
   const input = document.getElementById('chatInput');
   const sendBtn = document.getElementById('chatSendBtn');
   const statusEl = document.getElementById('chatStatus');
-  const userText = overrideText || input.value.trim();
+  const userText = input.value.trim();
   if (!userText || !apiKey) return;
 
-  // Add user message
   input.value = '';
   addChatBubble('user', userText);
   chatHistory.push({ role: 'user', content: userText });
@@ -818,7 +1270,7 @@ async function sendMessage(overrideText) {
       body: JSON.stringify({
         model: 'claude-sonnet-4-20250514',
         max_tokens: 4096,
-        system: CHAT_SYSTEM_PROMPT,
+        system: getChatSystemPrompt(),
         messages: chatHistory,
       }),
     });
@@ -850,159 +1302,14 @@ async function sendMessage(overrideText) {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// DEMO LOADER (generates HTML via Claude, then hot-swaps the page)
-// ═══════════════════════════════════════════════════════════════
-const DEMO_SYSTEM_PROMPT = `You are a code generator for interactive PLC ladder logic simulator web pages.
-
-RULES:
-- Output ONLY a single html code block with the COMPLETE, self-contained HTML file. Nothing else.
-- Do NOT output L5X files, explanations, or any text outside the code block.
-- The HTML must be fully functional — paste-into-browser ready.
-
-REQUIRED ARCHITECTURE (must match exactly):
-- SVG-based ladder logic rendered every 50ms PLC scan cycle
-- Double-click toggles input contacts (use pointerdown with 500ms double-click tracker — required because SVG rebuilds every 50ms destroy elements before click fires)
-- Forced indicator: green highlight rect on contacts that were manually toggled (forced[tag] = tags[tag])
-- Right sidebar (320px) with:
-  1. I/O Status table (Tag | Type | State) with color-coded type badges (Input=green, Output=blue, Sensor=purple) and state dots
-  2. Claude Chat panel: API key input (stored in localStorage as 'claude_api_key'), message area, send button, Anthropic API direct browser call with 'anthropic-dangerous-direct-browser-access' header
-- Two demo buttons in the title area: "Load Light Demo" and "Load Motor Demo" — each calls loadDemo('light') or loadDemo('motor') which sends a generation prompt to Claude, extracts the HTML from the response, and replaces the page via document.open/write/close
-- Flexbox page layout (.page-wrapper), responsive stacking below 900px
-- Visual style: #2d5aa0 blue theme, #f5f5f0 background, white panels with rounded borders, pill-shaped badges
-
-DRAWING FUNCTIONS needed:
-- drawXIC(g, tag, val, pwr, cy) — normally-open contact with vertical bars
-- drawXIO(g, tag, val, pwr, cy) — normally-closed contact with diagonal slash
-- drawOTE(g, tag, on, pwr, cy) — output energize with ellipse
-- For Light Demo also: drawOTL, drawOTU (latch/unlatch with L/U in circle), drawTON (timer block), drawRES (reset)`;
-
-const DEMO_PROMPTS = {
-  light: `Generate a "Switch/Light/Strobe Demo" ladder logic simulator HTML file.
-
-Program (8 rungs):
-- Tags: Switch1, Switch2, Switch3, Strobe1, Light1, Light2, Light3, FlashBit, FlashOn (timer), FlashOff (timer)
-- Rung 0: XIC(Strobe1) XIO(FlashBit) TON(FlashOn, 1000ms) — ON-phase timer
-- Rung 1: XIC(FlashOn.DN) OTL(FlashBit) — Latch FlashBit when ON-phase done
-- Rung 2: XIC(Strobe1) XIC(FlashBit) TON(FlashOff, 1000ms) — OFF-phase timer
-- Rung 3: XIC(FlashOff.DN) OTU(FlashBit) — Unlatch FlashBit when OFF-phase done
-- Rung 4: XIC(Switch1) XIC(FlashBit) OTE(Light1) — Switch1 controls Light1
-- Rung 5: XIC(Switch2) XIC(FlashBit) OTE(Light2) — Switch2 controls Light2
-- Rung 6: XIC(Switch3) XIC(FlashBit) OTE(Light3) — Switch3 controls Light3
-- Rung 7: XIO(Strobe1) RES(FlashOn) RES(FlashOff) — Reset timers when strobe off
-
-When Strobe1 is OFF, FlashBit stays OFF and lights stay off. Switches only work when Strobe1 is ON and FlashBit is cycling.
-
-Title: "Interactive Ladder Logic Simulator"
-Subtitle: "Switch / Light / Strobe Program | 8 Rungs | Real-Time PLC Scan"`,
-
-  motor: `Generate a "Motor Start/Stop Demo" ladder logic simulator HTML file.
-
-Program (2 rungs):
-- Tags: M1_Start, M1_Stop, M1_Running, M1_Faulted, M2_Start, M2_Stop, M2_Running, M2_Faulted, Photoeye
-- Rung 0: [XIC(M1_Start) || XIC(M1_Running)] XIO(M1_Stop) XIO(M1_Faulted) XIC(Photoeye) OTE(M1_Running)
-- Rung 1: [XIC(M2_Start) || XIC(M2_Running)] XIO(M2_Stop) XIO(M2_Faulted) XIC(Photoeye) OTE(M2_Running)
-
-Each motor has a start/stop seal-in circuit with parallel branches for the latch. M_Stop and M_Faulted are normally-closed. Photoeye is shared — must be ON for either motor to run.
-
-Title: "Interactive Ladder Logic Simulator"
-Subtitle: "Motor Start/Stop Program | 2 Rungs | Real-Time PLC Scan"`,
-};
-
-async function loadDemo(type) {
-  if (isSending) return;
-  if (!apiKey) {
-    addChatBubble('system', 'Please save your API key first to use demo prompts.');
-    return;
-  }
-
-  const label = type === 'light' ? 'Light Demo' : 'Motor Demo';
-  addChatBubble('user', `Load ${label}`);
-
-  isSending = true;
-  const sendBtn = document.getElementById('chatSendBtn');
-  const input = document.getElementById('chatInput');
-  const statusEl = document.getElementById('chatStatus');
-  sendBtn.disabled = true;
-  input.disabled = true;
-  statusEl.textContent = 'generating...';
-  showTyping();
-
-  // Disable demo buttons while generating
-  document.getElementById('loadLightDemo').disabled = true;
-  document.getElementById('loadMotorDemo').disabled = true;
-
-  try {
-    const resp = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-        'anthropic-dangerous-direct-browser-access': 'true',
-      },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
-        max_tokens: 16384,
-        system: DEMO_SYSTEM_PROMPT,
-        messages: [{ role: 'user', content: DEMO_PROMPTS[type] }],
-      }),
-    });
-
-    hideTyping();
-
-    if (!resp.ok) {
-      const err = await resp.json().catch(() => ({}));
-      addChatBubble('error', err.error?.message || `API error ${resp.status}`);
-      statusEl.textContent = 'error';
-    } else {
-      const data = await resp.json();
-      const text = data.content?.[0]?.text || '';
-
-      // Extract HTML from ```html code block
-      const htmlMatch = text.match(/```html\s*\n([\s\S]*?)```/);
-      if (htmlMatch && htmlMatch[1] && htmlMatch[1].includes('<html')) {
-        addChatBubble('system', `${label} generated. Reloading...`);
-        // Brief delay so user sees the message
-        await new Promise(r => setTimeout(r, 500));
-        // Use Blob URL for a true page navigation — scripts execute cleanly
-        const blob = new Blob([htmlMatch[1]], { type: 'text/html' });
-        window.location.href = URL.createObjectURL(blob);
-        return; // page is navigating away
-      } else {
-        addChatBubble('error', 'Could not extract valid HTML from response.');
-        addChatBubble('assistant', text);
-        statusEl.textContent = 'ready';
-      }
-    }
-  } catch (err) {
-    hideTyping();
-    addChatBubble('error', `Network error: ${err.message}`);
-    statusEl.textContent = 'error';
-  } finally {
-    isSending = false;
-    sendBtn.disabled = false;
-    input.disabled = false;
-    document.getElementById('loadLightDemo').disabled = false;
-    document.getElementById('loadMotorDemo').disabled = false;
-  }
-}
-
-function initDemoButtons() {
-  document.getElementById('loadLightDemo').addEventListener('click', () => loadDemo('light'));
-  document.getElementById('loadMotorDemo').addEventListener('click', () => loadDemo('motor'));
-}
-
-// ═══════════════════════════════════════════════════════════════
 // INITIALIZE
 // ═══════════════════════════════════════════════════════════════
-buildIOTable();
-createRungDOM();
-plcScan();
-setInterval(plcScan, SCAN_MS);
-const ro = new ResizeObserver(() => { for (let i = 0; i < rungState.length; i++) renderRung(i); });
-ro.observe(document.getElementById('rungs'));
+document.getElementById('loadMotorDemo').addEventListener('click', () => switchDemo('motor'));
+document.getElementById('loadLightDemo').addEventListener('click', () => switchDemo('light'));
 initChat();
-initDemoButtons();
+
+// Start with Motor demo by default
+switchDemo('motor');
 </script>
 
 </body>
