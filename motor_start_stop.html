@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Interactive Ladder Logic — Motor Start/Stop Simulator</title>
+<style>
+  :root {
+    --bg: #f5f5f0;
+    --rail: #333;
+    --wire-off: #555;
+    --wire-on: #00cc44;
+    --rung-bg: #fff;
+    --rung-border: #ccc;
+    --comment-color: #666;
+    --rung-num-bg: #2d5aa0;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Segoe UI', 'Arial', sans-serif;
+    background: var(--bg);
+    color: #333;
+    padding: 20px;
+    user-select: none;
+  }
+  h1 { text-align: center; font-size: 1.3em; margin-bottom: 4px; color: #222; font-weight: 600; }
+  .subtitle { text-align: center; color: var(--comment-color); font-size: 0.8em; margin-bottom: 8px; }
+  .instructions { text-align: center; color: #2d5aa0; font-size: 0.85em; margin-bottom: 20px; font-weight: 600; }
+  .status-panel {
+    display: flex; flex-wrap: wrap; gap: 8px; justify-content: center;
+    margin-bottom: 20px; padding: 10px 15px;
+    background: #fff; border-radius: 8px; border: 1px solid #ddd;
+  }
+  .status-item {
+    padding: 4px 12px; border-radius: 14px; font-size: 0.75em;
+    font-weight: 500; display: flex; align-items: center; gap: 5px;
+  }
+  .status-dot { width: 8px; height: 8px; border-radius: 50%; background: #ccc; display: inline-block; }
+  .status-item.start-item { background: #f0f0f0; color: #555; }
+  .status-item.start-item.on { background: #d4f5d4; color: #1a7a1a; }
+  .status-item.start-item.on .status-dot { background: #33cc33; box-shadow: 0 0 6px #33cc33; }
+  .status-item.stop-item { background: #f0f0f0; color: #555; }
+  .status-item.stop-item.on { background: #ffd4d4; color: #cc0000; }
+  .status-item.stop-item.on .status-dot { background: #ff3333; box-shadow: 0 0 6px #ff3333; }
+  .status-item.fault-item { background: #f0f0f0; color: #555; }
+  .status-item.fault-item.on { background: #ffe8c0; color: #b06000; }
+  .status-item.fault-item.on .status-dot { background: #ff9933; box-shadow: 0 0 6px #ff9933; }
+  .status-item.running-item { background: #f0f0f0; color: #555; }
+  .status-item.running-item.on { background: #d4e8f5; color: #2d5aa0; }
+  .status-item.running-item.on .status-dot { background: #3388dd; box-shadow: 0 0 8px #3388dd; }
+  .status-item.sensor-item { background: #f0f0f0; color: #555; }
+  .status-item.sensor-item.on { background: #e0d4f5; color: #6a2d9a; }
+  .status-item.sensor-item.on .status-dot { background: #9944cc; box-shadow: 0 0 6px #9944cc; }
+  .scan-info { text-align: center; margin-bottom: 12px; font-size: 0.7em; color: #999; }
+  .scan-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #ccc; margin-right: 4px; }
+  .scan-dot.active { background: #00cc44; }
+  .rung-container { margin-bottom: 10px; border: 1px solid var(--rung-border); border-radius: 6px; overflow: hidden; }
+  .rung-header {
+    display: flex; align-items: center; gap: 10px; padding: 5px 12px;
+    background: #f9f9f5; border-bottom: 1px solid #eee; font-size: 0.72em;
+  }
+  .rung-num { background: var(--rung-num-bg); color: #fff; border-radius: 3px; padding: 1px 7px; font-weight: 600; font-size: 0.9em; }
+  .rung-comment { color: var(--comment-color); font-style: italic; }
+  .rung-body { background: var(--rung-bg); padding: 10px; min-height: 80px; }
+  .rung.energized { border-left: 3px solid var(--wire-on); }
+  .legend {
+    display: flex; gap: 16px; align-items: center; flex-wrap: wrap;
+    padding: 8px 14px; margin-bottom: 16px; background: #fff;
+    border: 1px solid #eee; border-radius: 6px; font-size: 0.7em; color: #555;
+  }
+  .clickable { cursor: pointer; }
+  .clickable:hover { filter: brightness(1.12); }
+</style>
+</head>
+<body>
+
+<h1>Interactive Ladder Logic Simulator</h1>
+<div class="subtitle">Motor Start/Stop Program | 2 Rungs | Real-Time PLC Scan</div>
+<div class="instructions">Double-click any input contact to toggle ON / OFF</div>
+<div class="scan-info"><span class="scan-dot" id="scanDot"></span> PLC Scan: 50ms cycle</div>
+
+<div class="status-panel">
+  <div class="status-item start-item" id="st-M1_Start"><span class="status-dot"></span> M1_Start: OFF</div>
+  <div class="status-item stop-item" id="st-M1_Stop"><span class="status-dot"></span> M1_Stop: OFF</div>
+  <div class="status-item fault-item" id="st-M1_Faulted"><span class="status-dot"></span> M1_Faulted: OFF</div>
+  <div class="status-item running-item" id="st-M1_Running"><span class="status-dot"></span> M1_Running: OFF</div>
+  <div class="status-item start-item" id="st-M2_Start"><span class="status-dot"></span> M2_Start: OFF</div>
+  <div class="status-item stop-item" id="st-M2_Stop"><span class="status-dot"></span> M2_Stop: OFF</div>
+  <div class="status-item fault-item" id="st-M2_Faulted"><span class="status-dot"></span> M2_Faulted: OFF</div>
+  <div class="status-item running-item" id="st-M2_Running"><span class="status-dot"></span> M2_Running: OFF</div>
+  <div class="status-item sensor-item" id="st-Photoeye"><span class="status-dot"></span> Photoeye: OFF</div>
+</div>
+
+<div class="legend">
+  <span><b>Symbols:</b></span>
+  <span>&#x2500;| |&#x2500; XIC</span>
+  <span>&#x2500;/&#x2500; XIO</span>
+  <span>&#x2500;( )&#x2500; OTE</span>
+  <span style="color:#00cc44;">&#x25CF;</span><span> = power flowing</span>
+</div>
+
+<div id="rungs"></div>
+
+<script>
+const NS = 'http://www.w3.org/2000/svg';
+const WON = '#00cc44';
+const WOFF = '#555';
+const CW = 56;
+
+// ═══════════════════════════════════════════════════════════════
+// TAG STATE
+// ═══════════════════════════════════════════════════════════════
+const tags = {
+  M1_Start: false, M1_Stop: false, M1_Running: false, M1_Faulted: false,
+  M2_Start: false, M2_Stop: false, M2_Running: false, M2_Faulted: false,
+  Photoeye: false,
+};
+
+// ═══════════════════════════════════════════════════════════════
+// SVG HELPERS
+// ═══════════════════════════════════════════════════════════════
+function el(tag, attrs) {
+  const e = document.createElementNS(NS, tag);
+  for (const [k, v] of Object.entries(attrs || {})) e.setAttribute(k, v);
+  return e;
+}
+function ln(x1, y1, x2, y2, stroke, sw) {
+  return el('line', { x1, y1, x2, y2, stroke, 'stroke-width': sw || 2, 'stroke-linecap': 'round' });
+}
+function txt(x, y, text, opts = {}) {
+  const t = el('text', {
+    x, y, fill: opts.fill || '#333',
+    'font-size': opts.size || 10,
+    'font-family': opts.font || "'Segoe UI', Arial, sans-serif",
+    'font-weight': opts.bold ? 'bold' : '500',
+    'text-anchor': 'middle', 'dominant-baseline': 'middle',
+  });
+  t.textContent = text;
+  return t;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// SYMBOL DRAWING FUNCTIONS
+// ═══════════════════════════════════════════════════════════════
+function drawXIC(g, tag, val, pwr, cy) {
+  if (forced[tag]) {
+    g.appendChild(el('rect', { x: -4, y: cy-30, width: CW+8, height: 60, rx: 6, fill: '#d4f5d4', stroke: '#66bb66', 'stroke-width': 1.5, opacity: '0.7' }));
+  }
+  const col = val ? '#1a7a1a' : '#333';
+  g.appendChild(txt(CW/2, cy - 20, tag, { fill: col, size: 11, bold: val }));
+  g.appendChild(txt(CW/2, cy + 24, val ? '(ON)' : '(OFF)', { fill: val ? '#1a7a1a' : '#999', size: 8 }));
+  g.appendChild(ln(0, cy, 14, cy, pwr ? WON : WOFF, 2.5));
+  g.appendChild(ln(CW-14, cy, CW, cy, (pwr && val) ? WON : WOFF, 2.5));
+  g.appendChild(ln(14, cy-12, 14, cy+12, col, 2.5));
+  g.appendChild(ln(CW-14, cy-12, CW-14, cy+12, col, 2.5));
+}
+
+function drawXIO(g, tag, val, pwr, cy) {
+  if (forced[tag]) {
+    g.appendChild(el('rect', { x: -4, y: cy-30, width: CW+8, height: 60, rx: 6, fill: '#d4f5d4', stroke: '#66bb66', 'stroke-width': 1.5, opacity: '0.7' }));
+  }
+  const passing = !val;
+  const col = passing ? '#1a7a1a' : '#993333';
+  g.appendChild(txt(CW/2, cy - 20, tag, { fill: col, size: 11, bold: passing }));
+  g.appendChild(txt(CW/2, cy + 24, passing ? '(PASS)' : '(BLOCKED)', { fill: col, size: 7 }));
+  g.appendChild(ln(0, cy, 14, cy, pwr ? WON : WOFF, 2.5));
+  g.appendChild(ln(CW-14, cy, CW, cy, (pwr && passing) ? WON : WOFF, 2.5));
+  g.appendChild(ln(14, cy-12, 14, cy+12, col, 2.5));
+  g.appendChild(ln(CW-14, cy-12, CW-14, cy+12, col, 2.5));
+  g.appendChild(ln(14, cy+12, CW-14, cy-12, col, 2));
+}
+
+const MOTOR_COLOR = { on: '#3388dd', glow: '#3388dd', stroke: '#1a5599', label: '#2d5aa0', off: '#e8eef4', offStroke: '#2d5a7d' };
+
+function drawOTE(g, tag, on, pwr, cy) {
+  const w = pwr ? WON : WOFF;
+  const c = MOTOR_COLOR;
+  g.appendChild(txt(CW/2, cy - 20, tag, { fill: on ? c.label : c.offStroke, size: 11, bold: on }));
+  g.appendChild(txt(CW/2, cy + 24, on ? '(RUN)' : '(OFF)', { fill: on ? c.label : '#999', size: 8 }));
+  g.appendChild(ln(0, cy, 10, cy, w, 2.5));
+  if (on) {
+    g.appendChild(el('ellipse', { cx: CW/2, cy, rx: 18, ry: 16, fill: c.glow, opacity: '0.3' }));
+    g.appendChild(el('ellipse', { cx: CW/2, cy, rx: 14, ry: 12, fill: c.on, stroke: c.stroke, 'stroke-width': 2.5 }));
+  } else {
+    g.appendChild(el('ellipse', { cx: CW/2, cy, rx: 14, ry: 12, fill: c.off, stroke: c.offStroke, 'stroke-width': 2 }));
+  }
+  g.appendChild(ln(CW-10, cy, CW, cy, w, 2.5));
+}
+
+// ═══════════════════════════════════════════════════════════════
+// RUNG SPECS AND DOM
+// ═══════════════════════════════════════════════════════════════
+const rungSpecs = [
+  { start: 'M1_Start', running: 'M1_Running', stop: 'M1_Stop', fault: 'M1_Faulted', pe: 'Photoeye', comment: 'Motor 1: Start/Stop seal-in with fault protection + photoeye' },
+  { start: 'M2_Start', running: 'M2_Running', stop: 'M2_Stop', fault: 'M2_Faulted', pe: 'Photoeye', comment: 'Motor 2: Start/Stop seal-in with fault protection + photoeye' },
+];
+const rungState = [];
+
+function createRungDOM() {
+  const container = document.getElementById('rungs');
+  rungSpecs.forEach((spec, i) => {
+    const rc = document.createElement('div');
+    rc.className = 'rung-container';
+    const hdr = document.createElement('div');
+    hdr.className = 'rung-header';
+    hdr.innerHTML = `<span class="rung-num">${i}</span><span class="rung-comment">${spec.comment}</span>`;
+    rc.appendChild(hdr);
+    const body = document.createElement('div');
+    body.className = 'rung-body';
+    rc.appendChild(body);
+    container.appendChild(rc);
+    const div = document.createElement('div');
+    div.className = 'rung';
+    body.appendChild(div);
+    rungState.push({ div, body, spec });
+  });
+}
+
+function renderRung(idx) {
+  const rs = rungState[idx];
+  const { body, spec } = rs;
+  const W = body.clientWidth || 900;
+  const cy = 58;
+  const brSp = 60;
+  const H = cy + brSp + 40;
+
+  const svg = document.createElementNS(NS, 'svg');
+
+  // Rails
+  svg.appendChild(ln(0, 0, 0, H, '#333', 3));
+  svg.appendChild(ln(W, 0, W, H, '#333', 3));
+
+  const startOn = tags[spec.start];
+  const runningOn = tags[spec.running];
+  const stopOn = tags[spec.stop];
+  const faultOn = tags[spec.fault];
+  const peOn = tags[spec.pe];
+
+  // Branch power: M_Start OR M_Running (seal-in)
+  const branchPwr = startOn || runningOn;
+  // After stop (NC): passes when Stop is OFF
+  const afterStop = branchPwr && !stopOn;
+  // After fault (NC): passes when Faulted is OFF
+  const afterFault = afterStop && !faultOn;
+  // After photoeye (NO): passes when Photoeye is ON (unblocked)
+  const afterPE = afterFault && peOn;
+  const energized = afterPE;
+
+  // ── Parallel branch: XIC(M_Start) top, XIC(M_Running) bottom ──
+  const bx = W * 0.05;
+  const bEnd = W * 0.22;
+  const y0 = cy, y1 = cy + brSp;
+
+  // Left rail to branch start
+  svg.appendChild(ln(4, cy, bx, cy, WON, 2.5));
+
+  // Vertical branch lines
+  svg.appendChild(ln(bx, y0, bx, y1, WON, 2));
+  svg.appendChild(ln(bEnd, y0, bEnd, y1, branchPwr ? WON : WOFF, 2));
+
+  // Top branch: XIC(M_Start)
+  const gStart = el('g', { transform: `translate(${(bx+bEnd)/2 - CW/2}, 0)`, class: 'clickable' });
+  drawXIC(gStart, spec.start, startOn, true, y0);
+  addToggle(gStart, spec.start, y0);
+  svg.appendChild(gStart);
+  const startPwr = startOn;
+  svg.appendChild(ln(bx, y0, (bx+bEnd)/2 - CW/2, y0, WON, 2.5));
+  svg.appendChild(ln((bx+bEnd)/2 + CW/2, y0, bEnd, y0, startPwr ? WON : WOFF, 2.5));
+
+  // Bottom branch: XIC(M_Running)
+  const gRun = el('g', { transform: `translate(${(bx+bEnd)/2 - CW/2}, 0)` });
+  drawXIC(gRun, spec.running, runningOn, true, y1);
+  svg.appendChild(gRun);
+  const runPwr = runningOn;
+  svg.appendChild(ln(bx, y1, (bx+bEnd)/2 - CW/2, y1, WON, 2.5));
+  svg.appendChild(ln((bx+bEnd)/2 + CW/2, y1, bEnd, y1, runPwr ? WON : WOFF, 2.5));
+
+  // ── Series: XIO(M_Stop) ──
+  const stopX = W * 0.28;
+  svg.appendChild(ln(bEnd, y0, stopX, y0, branchPwr ? WON : WOFF, 2.5));
+  const gStop = el('g', { transform: `translate(${stopX}, 0)`, class: 'clickable' });
+  drawXIO(gStop, spec.stop, stopOn, branchPwr, y0);
+  addToggle(gStop, spec.stop, y0);
+  svg.appendChild(gStop);
+
+  // ── Series: XIO(M_Faulted) ──
+  const faultX = W * 0.42;
+  svg.appendChild(ln(stopX + CW, y0, faultX, y0, afterStop ? WON : WOFF, 2.5));
+  const gFault = el('g', { transform: `translate(${faultX}, 0)`, class: 'clickable' });
+  drawXIO(gFault, spec.fault, faultOn, afterStop, y0);
+  addToggle(gFault, spec.fault, y0);
+  svg.appendChild(gFault);
+
+  // ── Series: XIC(Photoeye) ──
+  const peX = W * 0.56;
+  svg.appendChild(ln(faultX + CW, y0, peX, y0, afterFault ? WON : WOFF, 2.5));
+  const gPE = el('g', { transform: `translate(${peX}, 0)`, class: 'clickable' });
+  drawXIC(gPE, spec.pe, peOn, afterFault, y0);
+  addToggle(gPE, spec.pe, y0);
+  svg.appendChild(gPE);
+
+  // ── Output: OTE(M_Running) ──
+  const oteX = W * 0.78;
+  svg.appendChild(ln(peX + CW, y0, oteX, y0, afterPE ? WON : WOFF, 2.5));
+  const gOTE = el('g', { transform: `translate(${oteX}, 0)` });
+  drawOTE(gOTE, spec.running, energized, afterPE, y0);
+  svg.appendChild(gOTE);
+  svg.appendChild(ln(oteX + CW, y0, W - 4, y0, afterPE ? WON : WOFF, 2.5));
+
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+  svg.style.width = '100%';
+  svg.style.height = 'auto';
+
+  const wrapper = document.createElement('div');
+  wrapper.className = energized ? 'rung energized' : 'rung';
+  wrapper.appendChild(svg);
+  body.innerHTML = '';
+  body.appendChild(wrapper);
+  rs.div = wrapper;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// TOGGLE HELPER (pointerdown survives 50ms SVG rebuilds)
+// ═══════════════════════════════════════════════════════════════
+const clickTracker = {};
+const forced = {};
+function addToggle(g, tag, cy) {
+  const r = el('rect', { x: 0, y: cy-22, width: CW, height: 44, fill: 'transparent', cursor: 'pointer' });
+  g.appendChild(r);
+  g.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const now = Date.now();
+    if (clickTracker[tag] && (now - clickTracker[tag]) < 500) {
+      tags[tag] = !tags[tag];
+      forced[tag] = tags[tag];
+      clickTracker[tag] = 0;
+    } else {
+      clickTracker[tag] = now;
+    }
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════
+// PLC SCAN ENGINE (50ms cycle)
+// ═══════════════════════════════════════════════════════════════
+const SCAN_MS = 50;
+let scanCount = 0;
+
+function plcScan() {
+  // Rung 0: [XIC(M1_Start), XIC(M1_Running)] XIO(M1_Stop) XIO(M1_Faulted) XIC(Photoeye) OTE(M1_Running)
+  tags.M1_Running = (tags.M1_Start || tags.M1_Running) && !tags.M1_Stop && !tags.M1_Faulted && tags.Photoeye;
+  // Rung 1: [XIC(M2_Start), XIC(M2_Running)] XIO(M2_Stop) XIO(M2_Faulted) XIC(Photoeye) OTE(M2_Running)
+  tags.M2_Running = (tags.M2_Start || tags.M2_Running) && !tags.M2_Stop && !tags.M2_Faulted && tags.Photoeye;
+
+  for (let i = 0; i < rungState.length; i++) renderRung(i);
+  updateStatusPanel();
+  scanCount++;
+  document.getElementById('scanDot').className = 'scan-dot' + (scanCount % 2 === 0 ? ' active' : '');
+}
+
+function updateStatusPanel() {
+  const items = [
+    ['M1_Start', 'start'], ['M1_Stop', 'stop'], ['M1_Faulted', 'fault'], ['M1_Running', 'running'],
+    ['M2_Start', 'start'], ['M2_Stop', 'stop'], ['M2_Faulted', 'fault'], ['M2_Running', 'running'],
+    ['Photoeye', 'sensor'],
+  ];
+  items.forEach(([tag, type]) => {
+    const elem = document.getElementById(`st-${tag}`);
+    if (!elem) return;
+    const on = tags[tag];
+    elem.className = `status-item ${type}-item` + (on ? ' on' : '');
+    elem.innerHTML = `<span class="status-dot"></span> ${tag}: ${on ? 'ON' : 'OFF'}`;
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════
+// INITIALIZE
+// ═══════════════════════════════════════════════════════════════
+createRungDOM();
+plcScan();
+setInterval(plcScan, SCAN_MS);
+const ro = new ResizeObserver(() => { for (let i = 0; i < rungState.length; i++) renderRung(i); });
+ro.observe(document.getElementById('rungs'));
+</script>
+
+<div style="text-align:center; margin-top:20px; color:#999; font-size:0.7em;">
+  Interactive PLC Ladder Logic Simulator | Real-time scan at 50ms | Double-click contacts to toggle
+</div>
+
+</body>
+</html>
