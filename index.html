@@ -530,26 +530,26 @@ const DEMOS = {
         ],
       },
       {
-        comment: 'Switch1 controls Light1 (requires FlashBit ON)',
+        comment: 'Switch1 → Light1 (steady ON, or flashing if Strobe enabled)',
         elements: [
           { type: 'XIC', tag: 'Switch1' },
-          { type: 'XIC', tag: 'FlashBit' },
+          { type: 'parallel', branches: [[{type:'XIO', tag:'Strobe1'}],[{type:'XIC', tag:'FlashBit'}]] },
           { type: 'OTE', tag: 'Light1' },
         ],
       },
       {
-        comment: 'Switch2 controls Light2 (requires FlashBit ON)',
+        comment: 'Switch2 → Light2 (steady ON, or flashing if Strobe enabled)',
         elements: [
           { type: 'XIC', tag: 'Switch2' },
-          { type: 'XIC', tag: 'FlashBit' },
+          { type: 'parallel', branches: [[{type:'XIO', tag:'Strobe1'}],[{type:'XIC', tag:'FlashBit'}]] },
           { type: 'OTE', tag: 'Light2' },
         ],
       },
       {
-        comment: 'Switch3 controls Light3 (requires FlashBit ON)',
+        comment: 'Switch3 → Light3 (steady ON, or flashing if Strobe enabled)',
         elements: [
           { type: 'XIC', tag: 'Switch3' },
-          { type: 'XIC', tag: 'FlashBit' },
+          { type: 'parallel', branches: [[{type:'XIO', tag:'Strobe1'}],[{type:'XIC', tag:'FlashBit'}]] },
           { type: 'OTE', tag: 'Light3' },
         ],
       },
@@ -577,10 +577,10 @@ const DEMOS = {
       // Rung 3: Unlatch FlashBit
       if (timers.FlashOff.dn) tags.FlashBit = false;
 
-      // Rungs 4-6: Switch → Light (gated by FlashBit)
-      tags.Light1 = tags.Switch1 && tags.FlashBit;
-      tags.Light2 = tags.Switch2 && tags.FlashBit;
-      tags.Light3 = tags.Switch3 && tags.FlashBit;
+      // Rungs 4-6: Switch → Light (steady ON, or flashing when Strobe enabled)
+      tags.Light1 = tags.Switch1 && (!tags.Strobe1 || tags.FlashBit);
+      tags.Light2 = tags.Switch2 && (!tags.Strobe1 || tags.FlashBit);
+      tags.Light3 = tags.Switch3 && (!tags.Strobe1 || tags.FlashBit);
 
       // Rung 7: Reset timers when strobe is off
       if (!tags.Strobe1) {
