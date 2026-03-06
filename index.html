@@ -1371,10 +1371,13 @@ async function sendMessage() {
         const explanation = assistantText.replace(/```js\s*\n[\s\S]*?```/g, '').trim();
         if (explanation) addChatBubble('assistant', explanation);
 
-        // Execute the code
+        // Execute the code, then force an immediate render
         try {
           addChatBubble('system', '⚡ Applying changes...');
           eval(codeMatch[1]);
+          // Force immediate re-render so graphics update now
+          for (let i = 0; i < rungBodies.length; i++) renderRung(i);
+          updateIOTable();
           addChatBubble('system', '✅ Program updated successfully.');
         } catch (execErr) {
           addChatBubble('error', `Code execution error: ${execErr.message}`);
