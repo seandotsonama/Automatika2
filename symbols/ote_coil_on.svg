@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 95" width="180" height="95">
+  <title>OTE - Energized</title>
+  <style>
+    text { font-family: 'Segoe UI', Arial, sans-serif; }
+  </style>
+
+  <!-- Green background indicating power flow -->
+  <rect x="0" y="0" width="180" height="95" rx="6" fill="#e6f9e6"/>
+
+  <!-- Wire in (energized green) -->
+  <line x1="10" y1="50" x2="46" y2="50" stroke="#00cc44" stroke-width="2.5" stroke-linecap="round"/>
+  <!-- Coil ellipse (energized fill) -->
+  <ellipse cx="90" cy="50" rx="40" ry="16" fill="#b8f0b8" stroke="#006600" stroke-width="2.5"/>
+  <!-- Wire out (energized green) -->
+  <line x1="134" y1="50" x2="170" y2="50" stroke="#00cc44" stroke-width="2.5" stroke-linecap="round"/>
+  <!-- Tag name -->
+  <text x="90" y="22" fill="#006600" font-size="12" font-weight="bold" text-anchor="middle" dominant-baseline="middle">TagName</text>
+  <!-- Type label -->
+  <text x="90" y="78" fill="#006600" font-size="9" text-anchor="middle" dominant-baseline="middle">OTE (ON)</text>
+
+</svg>

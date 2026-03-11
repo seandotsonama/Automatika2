@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 100" width="200" height="100">
+  <title>MOV - Move</title>
+  <style>
+    text { font-family: 'Segoe UI', Arial, sans-serif; }
+  </style>
+  
+  <line x1="10" y1="55" x2="25" y2="55" stroke="#555" stroke-width="2.5" stroke-linecap="round"/>
+  <rect x="25" y="16" width="150" height="76" rx="5" fill="#f0f4f8" stroke="#6a7a8a" stroke-width="2"/>
+  <text x="100" y="32" fill="#6a7a8a" font-size="12" font-weight="bold" text-anchor="middle" dominant-baseline="middle">MOV</text>
+  <text x="100" y="48" fill="#666" font-size="9" text-anchor="middle" dominant-baseline="middle">Source: Value</text>
+  <text x="100" y="62" fill="#666" font-size="9" text-anchor="middle" dominant-baseline="middle"></text>
+  <text x="100" y="76" fill="#666" font-size="9" text-anchor="middle" dominant-baseline="middle">Dest: Target</text>
+  <line x1="175" y1="55" x2="190" y2="55" stroke="#555" stroke-width="2.5" stroke-linecap="round"/>
+
+</svg>

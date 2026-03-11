@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 95" width="180" height="95">
+  <title>OTE - Output Energize</title>
+  <style>
+    text { font-family: 'Segoe UI', Arial, sans-serif; }
+  </style>
+  
+  <line x1="10" y1="50" x2="46" y2="50" stroke="#555" stroke-width="2.5" stroke-linecap="round"/>
+  <ellipse cx="90" cy="50" rx="40" ry="16" fill="#e8eef4" stroke="#2d5a7d" stroke-width="2"/>
+  <line x1="134" y1="50" x2="170" y2="50" stroke="#555" stroke-width="2.5" stroke-linecap="round"/>
+  <text x="90" y="22" fill="#2d5a7d" font-size="12" font-weight="500" text-anchor="middle" dominant-baseline="middle">TagName</text>
+  <text x="90" y="78" fill="#999" font-size="9" text-anchor="middle" dominant-baseline="middle">OTE</text>
+
+</svg>

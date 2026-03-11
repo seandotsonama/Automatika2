@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 95" width="180" height="95">
+  <title>XIO - Examine If Open</title>
+  <style>
+    text { font-family: 'Segoe UI', Arial, sans-serif; }
+  </style>
+  
+  <line x1="10" y1="50" x2="55" y2="50" stroke="#555" stroke-width="2.5" stroke-linecap="round"/>
+  <line x1="125" y1="50" x2="170" y2="50" stroke="#555" stroke-width="2.5" stroke-linecap="round"/>
+  <!-- Left vertical bar -->
+  <line x1="55" y1="36" x2="55" y2="64" stroke="#1a7a1a" stroke-width="2.5" stroke-linecap="round"/>
+  <!-- Right vertical bar -->
+  <line x1="125" y1="36" x2="125" y2="64" stroke="#1a7a1a" stroke-width="2.5" stroke-linecap="round"/>
+  <!-- Diagonal slash (NOT indicator) -->
+  <line x1="55" y1="64" x2="125" y2="36" stroke="#1a7a1a" stroke-width="2" stroke-linecap="round"/>
+  <text x="90" y="26" fill="#1a7a1a" font-size="12" font-weight="500" text-anchor="middle" dominant-baseline="middle">TagName</text>
+  <text x="90" y="78" fill="#999" font-size="9" text-anchor="middle" dominant-baseline="middle">XIO</text>
+
+</svg>
